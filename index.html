@@ -1,0 +1,1795 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>吃谷小管家</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #F0F8FF;
+      --bg-gradient: linear-gradient(135deg, #E3F2FD 0%, #E0F7FA 50%, #F3E5F5 100%);
+      --card-bg: rgba(255, 255, 255, 0.85);
+      --card-border: rgba(255, 255, 255, 0.5);
+      --primary: #4FC3F7;
+      --primary-light: #81D4FA;
+      --primary-dark: #29B6F6;
+      --text: #3A506B;
+      --text-light: #7A9BBF;
+      --shadow: 0 8px 32px rgba(79, 195, 247, 0.15);
+      --shadow-sm: 0 2px 12px rgba(79, 195, 247, 0.1);
+      --radius: 20px;
+      --radius-sm: 12px;
+      --status-pending: #FFA726;
+      --status-disbanded: #BDBDBD;
+      --status-arrived: #66BB6A;
+      --status-shipped: #42A5F5;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-gradient);
+      background-attachment: fixed;
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    #app {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* ===== 页面容器 ===== */
+    .page {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 16px 16px 80px;
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.9); opacity: 0; }
+      70% { transform: scale(1.02); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* ===== 标题栏 ===== */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-top: 8px;
+    }
+
+    .header-title {
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: var(--card-bg);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 18px;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s;
+      color: var(--primary);
+    }
+
+    .icon-btn:active {
+      transform: scale(0.92);
+    }
+
+    /* ===== Tab 切换 ===== */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 0 12px;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab {
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: none;
+      background: rgba(255, 255, 255, 0.5);
+      color: var(--text-light);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+      backdrop-filter: blur(10px);
+    }
+
+    .tab.active {
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      color: white;
+      box-shadow: 0 4px 16px rgba(79, 195, 247, 0.3);
+    }
+
+    /* ===== 团看板 ===== */
+    .group-board {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--card-border);
+      animation: pop 0.4s ease;
+    }
+
+    .board-title {
+      font-size: 13px;
+      color: var(--text-light);
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .board-stats {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .board-stat {
+      flex: 1;
+      min-width: 80px;
+      text-align: center;
+    }
+
+    .board-stat-value {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--primary-dark);
+    }
+
+    .board-stat-label {
+      font-size: 11px;
+      color: var(--text-light);
+      margin-top: 4px;
+    }
+
+    /* ===== 卡片 ===== */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    @media (min-width: 600px) {
+      .card-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--card-border);
+      cursor: pointer;
+      transition: all 0.2s;
+      animation: pop 0.3s ease;
+    }
+
+    .card:active {
+      transform: scale(0.97);
+    }
+
+    .card-image {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      background: linear-gradient(135deg, #E1F5FE, #E8EAF6);
+    }
+
+    .card-image-placeholder {
+      width: 100%;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      background: linear-gradient(135deg, #E1F5FE, #E8EAF6);
+    }
+
+    .card-body {
+      padding: 10px 12px 12px;
+    }
+
+    .card-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .card-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 6px;
+    }
+
+    .card-price {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--primary-dark);
+    }
+
+    .card-status {
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .status-pending { background: var(--status-pending); }
+    .status-disbanded { background: var(--status-disbanded); }
+    .status-arrived { background: var(--status-arrived); }
+    .status-shipped { background: var(--status-shipped); }
+
+    .card-group {
+      font-size: 11px;
+      color: var(--text-light);
+      margin-top: 4px;
+    }
+
+    /* ===== 空状态 ===== */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-light);
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.6;
+    }
+
+    .empty-state-text {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    /* ===== 底部导航 ===== */
+    .nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-around;
+      padding: 8px 0 20px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(255, 255, 255, 0.5);
+      z-index: 100;
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 20px;
+      border: none;
+      background: none;
+      font-family: inherit;
+      cursor: pointer;
+      color: var(--text-light);
+      transition: all 0.2s;
+    }
+
+    .nav-item.active {
+      color: var(--primary);
+    }
+
+    .nav-item-icon {
+      width: 24px;
+      height: 24px;
+      transition: transform 0.2s;
+    }
+
+    .nav-item.active .nav-item-icon {
+      transform: translateY(-2px);
+    }
+
+    .nav-item-label {
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    /* ===== 悬浮添加按钮 ===== */
+    .fab {
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(79, 195, 247, 0.4);
+      z-index: 90;
+      transition: all 0.2s;
+    }
+
+    .fab:active {
+      transform: scale(0.9);
+    }
+
+    /* ===== 表单页面 ===== */
+    .form-page {
+      padding-bottom: 40px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-light);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid rgba(79, 195, 247, 0.15);
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.7);
+      font-size: 15px;
+      font-family: inherit;
+      color: var(--text);
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--primary-light);
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 0 0 4px rgba(79, 195, 247, 0.1);
+    }
+
+    .form-textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .image-upload {
+      width: 100%;
+      aspect-ratio: 1;
+      max-height: 300px;
+      border: 2px dashed rgba(79, 195, 247, 0.3);
+      border-radius: var(--radius-sm);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.5);
+      transition: all 0.2s;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .image-upload:hover {
+      border-color: var(--primary);
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    .image-upload.has-image {
+      border-style: solid;
+      border-color: var(--primary-light);
+    }
+
+    .image-upload img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .image-upload-placeholder {
+      text-align: center;
+      color: var(--text-light);
+    }
+
+    .image-upload-placeholder-icon {
+      font-size: 40px;
+      margin-bottom: 8px;
+    }
+
+    .image-upload-placeholder-text {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .image-upload-clear {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--text);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .status-selector {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status-option {
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      border: 2px solid transparent;
+      background: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: var(--text);
+    }
+
+    .status-option.selected {
+      border-color: var(--primary);
+      background: rgba(79, 195, 247, 0.1);
+      color: var(--primary-dark);
+    }
+
+    .group-input-wrapper {
+      position: relative;
+    }
+
+    .group-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 50;
+      display: none;
+      margin-top: 4px;
+    }
+
+    .group-dropdown.show {
+      display: block;
+    }
+
+    .group-dropdown-item {
+      padding: 12px 16px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.15s;
+    }
+
+    .group-dropdown-item:hover {
+      background: rgba(79, 195, 247, 0.1);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s;
+    }
+
+    .btn-primary:active {
+      transform: scale(0.98);
+      box-shadow: none;
+    }
+
+    .btn-danger {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, #FF6B6B, #EE5A5A);
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 14px;
+      border: 2px solid rgba(79, 195, 247, 0.3);
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.6);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    /* ===== 我的页面统计面板 ===== */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--card-border);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .stat-card:active {
+      transform: scale(0.97);
+    }
+
+    .stat-card-value {
+      font-size: 26px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-card-label {
+      font-size: 12px;
+      color: var(--text-light);
+      margin-top: 4px;
+      font-weight: 600;
+    }
+
+    /* ===== 团列表 ===== */
+    .group-list {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--card-border);
+      overflow: hidden;
+    }
+
+    .group-list-header {
+      padding: 16px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-light);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .group-list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: background 0.15s;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+    }
+
+    .group-list-item:last-child {
+      border-bottom: none;
+    }
+
+    .group-list-item:hover {
+      background: rgba(79, 195, 247, 0.05);
+    }
+
+    .group-list-item-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .group-list-item-stats {
+      display: flex;
+      gap: 12px;
+    }
+
+    .group-list-item-stat {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    .group-list-item-stat span {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    /* ===== 详情弹窗 ===== */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(5px);
+      z-index: 200;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      backdrop-filter: blur(30px);
+      border-radius: var(--radius) var(--radius) 0 0;
+      width: 100%;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 20px 16px 40px;
+      animation: slideUp 0.3s ease;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .modal-close {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(0, 0, 0, 0.05);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 250px;
+      margin: 16px 0;
+    }
+
+    /* ===== 列表详情弹窗 ===== */
+    .detail-list {
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    .detail-list-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.5);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+    }
+
+    .detail-list-item img {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+
+    .detail-list-item-info {
+      flex: 1;
+    }
+
+    .detail-list-item-name {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .detail-list-item-meta {
+      font-size: 12px;
+      color: var(--text-light);
+      margin-top: 2px;
+    }
+
+    .detail-list-item-price {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--primary-dark);
+    }
+
+    /* ===== 数据管理 ===== */
+    .data-actions {
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .hidden-file-input {
+      display: none;
+    }
+
+    /* ===== 确认弹窗 ===== */
+    .confirm-dialog {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+      z-index: 300;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .confirm-dialog.show {
+      display: flex;
+    }
+
+    .confirm-box {
+      background: white;
+      border-radius: var(--radius);
+      padding: 24px;
+      width: 100%;
+      max-width: 320px;
+      text-align: center;
+      animation: pop 0.3s ease;
+    }
+
+    .confirm-box-title {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .confirm-box-text {
+      font-size: 14px;
+      color: var(--text-light);
+      margin-bottom: 20px;
+    }
+
+    .confirm-box-buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    .confirm-box-buttons button {
+      flex: 1;
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      border: none;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .btn-cancel {
+      background: rgba(0, 0, 0, 0.05);
+      color: var(--text);
+    }
+
+    .btn-confirm {
+      background: linear-gradient(135deg, #FF6B6B, #EE5A5A);
+      color: white;
+    }
+
+    /* ===== 滚动条美化 ===== */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(79, 195, 247, 0.3);
+      border-radius: 4px;
+    }
+
+    /* ===== 加载动画 ===== */
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(79, 195, 247, 0.2);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ===== 提示条 ===== */
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 400;
+      transition: transform 0.3s ease;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- ===== 首页 ===== -->
+    <div id="page-home" class="page active">
+      <div class="header">
+        <div class="header-title">我的谷子</div>
+        <div class="header-actions">
+          <button class="icon-btn" onclick="app.exportData()" title="导出">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          </button>
+        </div>
+      </div>
+      <div class="tabs" id="home-tabs"></div>
+      <div id="home-board"></div>
+      <div id="home-content"></div>
+    </div>
+
+    <!-- ===== 我的页面 ===== -->
+    <div id="page-mine" class="page">
+      <div class="header">
+        <div class="header-title">我的</div>
+      </div>
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="group-list" id="mine-group-list"></div>
+      <div class="data-actions">
+        <button class="btn-secondary" onclick="app.exportData()">📥 导出数据备份</button>
+        <label class="btn-secondary" style="display:block;text-align:center;">
+          📤 导入数据恢复
+          <input type="file" class="hidden-file-input" accept=".json" onchange="app.importData(this)">
+        </label>
+      </div>
+    </div>
+
+    <!-- ===== 新建/编辑卡片页 ===== -->
+    <div id="page-card" class="page form-page">
+      <div class="header">
+        <button class="icon-btn" onclick="app.goBack()">←</button>
+        <div class="header-title" id="card-form-title">新增谷子</div>
+        <div style="width:40px"></div>
+      </div>
+      <form id="card-form" onsubmit="app.saveCard(event)">
+        <input type="hidden" id="card-id">
+        <div class="form-group">
+          <label class="form-label">图片</label>
+          <div class="image-upload" id="image-upload" onclick="document.getElementById('card-image-input').click()">
+            <div class="image-upload-placeholder" id="image-placeholder">
+              <div class="image-upload-placeholder-icon">🍽️</div>
+              <div class="image-upload-placeholder-text">点击上传图片</div>
+            </div>
+            <img id="card-image-preview" style="display:none;">
+            <button type="button" class="image-upload-clear" id="image-clear" style="display:none;" onclick="event.stopPropagation();app.clearImage()">×</button>
+          </div>
+          <input type="file" id="card-image-input" class="hidden-file-input" accept="image/*" onchange="app.handleImageUpload(this)">
+          <input type="hidden" id="card-image-data">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">谷名</label>
+          <input type="text" class="form-input" id="card-name" placeholder="请输入谷名（1-20字）" maxlength="20" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">价格</label>
+          <input type="number" class="form-input" id="card-price" placeholder="0.00" min="0" step="0.01" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">团名</label>
+          <div class="group-input-wrapper">
+            <input type="text" class="form-input" id="card-group" placeholder="输入或选择团名" required autocomplete="off" oninput="app.filterGroups(this.value)" onfocus="app.showGroupDropdown()">
+            <div class="group-dropdown" id="group-dropdown"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">谷子状态</label>
+          <div class="status-selector">
+            <button type="button" class="status-option" data-status="pending" onclick="app.selectStatus(this)">🚚 未到货</button>
+            <button type="button" class="status-option" data-status="disbanded" onclick="app.selectStatus(this)">💨 已散</button>
+            <button type="button" class="status-option" data-status="arrived" onclick="app.selectStatus(this)">📦 已到货</button>
+            <button type="button" class="status-option" data-status="shipped" onclick="app.selectStatus(this)">✈️ 已排发</button>
+          </div>
+          <input type="hidden" id="card-status" value="pending">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">囤货 DDL</label>
+          <input type="date" class="form-input" id="card-deadline">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">备注</label>
+          <textarea class="form-textarea" id="card-note" placeholder="写点什么..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">记录时间</label>
+          <input type="date" class="form-input" id="card-created" required>
+        </div>
+
+        <button type="submit" class="btn-primary">保存</button>
+        <button type="button" class="btn-danger" id="btn-delete" style="display:none;" onclick="app.confirmDelete()">删除</button>
+      </form>
+    </div>
+
+    <!-- ===== 底部导航 ===== -->
+    <nav class="nav">
+      <button class="nav-item active" onclick="app.navigate('home')">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        <span class="nav-item-label">首页</span>
+      </button>
+      <button class="nav-item" onclick="app.navigate('mine')">
+        <svg class="nav-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        <span class="nav-item-label">我的</span>
+      </button>
+    </nav>
+
+    <!-- ===== 悬浮添加按钮 ===== -->
+    <button class="fab" onclick="app.newCard()" id="fab">+</button>
+
+    <!-- ===== 详情弹窗 ===== -->
+    <div class="modal-overlay" id="modal" onclick="if(event.target===this)app.closeModal()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title" id="modal-title">详情</div>
+          <button class="modal-close" onclick="app.closeModal()">×</button>
+        </div>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- ===== 确认弹窗 ===== -->
+    <div class="confirm-dialog" id="confirm-dialog">
+      <div class="confirm-box">
+        <div class="confirm-box-title" id="confirm-title">确认删除?</div>
+        <div class="confirm-box-text" id="confirm-text">删除后无法恢复</div>
+        <div class="confirm-box-buttons">
+          <button class="btn-cancel" onclick="app.closeConfirm()">取消</button>
+          <button class="btn-confirm" id="confirm-btn">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Toast ===== -->
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script>
+    // ==================== 状态配置 ====================
+    const STATUS_CONFIG = {
+      pending: { label: '未到货', class: 'status-pending', icon: '🚚' },
+      disbanded: { label: '已散', class: 'status-disbanded', icon: '💨' },
+      arrived: { label: '已到货', class: 'status-arrived', icon: '📦' },
+      shipped: { label: '已排发', class: 'status-shipped', icon: '✈️' }
+    };
+
+    // ==================== 数据层 ====================
+    const Storage = {
+      KEY: 'chigu_cards_v1',
+      getAll() {
+        try {
+          const data = localStorage.getItem(this.KEY);
+          return data ? JSON.parse(data) : [];
+        } catch {
+          return [];
+        }
+      },
+      save(cards) {
+        localStorage.setItem(this.KEY, JSON.stringify(cards));
+      },
+      add(card) {
+        const cards = this.getAll();
+        cards.push(card);
+        this.save(cards);
+        return card;
+      },
+      update(id, updates) {
+        const cards = this.getAll();
+        const idx = cards.findIndex(c => c.id === id);
+        if (idx >= 0) {
+          cards[idx] = { ...cards[idx], ...updates, updatedAt: new Date().toISOString() };
+          this.save(cards);
+          return cards[idx];
+        }
+        return null;
+      },
+      delete(id) {
+        const cards = this.getAll().filter(c => c.id !== id);
+        this.save(cards);
+      },
+      get(id) {
+        return this.getAll().find(c => c.id === id);
+      },
+      import(data) {
+        if (Array.isArray(data)) {
+          this.save(data);
+          return true;
+        }
+        if (data && Array.isArray(data.cards)) {
+          this.save(data.cards);
+          return true;
+        }
+        return false;
+      },
+      export() {
+        return {
+          version: 1,
+          exportAt: new Date().toISOString(),
+          cards: this.getAll()
+        };
+      }
+    };
+
+    // ==================== 工具函数 ====================
+    function uuid() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+      });
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function formatPrice(price) {
+      return '¥' + parseFloat(price || 0).toFixed(2);
+    }
+
+    function getMonthKey(dateStr) {
+      const d = new Date(dateStr);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function getCurrentMonthKey() {
+      return getMonthKey(new Date());
+    }
+
+    // ==================== 应用逻辑 ====================
+    const app = {
+      currentPage: 'home',
+      currentGroup: null,
+      editingId: null,
+      chartInstance: null,
+
+      init() {
+        this.renderHome();
+        this.renderMine();
+        window.addEventListener('hashchange', () => this.handleRoute());
+        this.handleRoute();
+
+        // 点击外部关闭下拉
+        document.addEventListener('click', e => {
+          if (!e.target.closest('.group-input-wrapper')) {
+            document.getElementById('group-dropdown').classList.remove('show');
+          }
+        });
+      },
+
+      // ----- 路由 -----
+      navigate(page) {
+        window.location.hash = page === 'home' ? '' : page;
+      },
+
+      goBack() {
+        history.back();
+      },
+
+      handleRoute() {
+        const hash = window.location.hash.replace('#', '') || 'home';
+        const [page, sub, ...rest] = hash.split('/');
+
+        // 隐藏所有页面
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+        this.currentPage = page;
+
+        if (page === 'home' || page === '') {
+          document.getElementById('page-home').classList.add('active');
+          document.querySelectorAll('.nav-item')[0].classList.add('active');
+          this.currentGroup = sub === 'group' ? decodeURIComponent(rest[0] || '') : null;
+          this.renderHome();
+          document.getElementById('fab').style.display = 'flex';
+        } else if (page === 'mine') {
+          document.getElementById('page-mine').classList.add('active');
+          document.querySelectorAll('.nav-item')[1].classList.add('active');
+          this.renderMine();
+          document.getElementById('fab').style.display = 'none';
+        } else if (page === 'card') {
+          document.getElementById('page-card').classList.add('active');
+          document.getElementById('fab').style.display = 'none';
+          if (sub === 'edit') {
+            this.editCard(rest[0]);
+          } else {
+            this.resetForm();
+          }
+        }
+      },
+
+      // ----- 首页 -----
+      renderHome() {
+        const cards = Storage.getAll();
+        const groups = [...new Set(cards.map(c => c.group).filter(Boolean))];
+        const allGroups = ['全部', ...groups];
+
+        // 渲染Tabs
+        const tabsEl = document.getElementById('home-tabs');
+        tabsEl.innerHTML = allGroups.map(g => {
+          const isActive = (g === '全部' && !this.currentGroup) || g === this.currentGroup;
+          return `<button class="tab ${isActive ? 'active' : ''}" onclick="app.switchGroup(${g === '全部' ? "''" : JSON.stringify(g).replace(/"/g, '&quot;')})">${g}</button>`;
+        }).join('');
+
+        // 确定展示的卡片
+        let displayCards = cards;
+        if (this.currentGroup) {
+          displayCards = cards.filter(c => c.group === this.currentGroup);
+        }
+        displayCards.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // 渲染看板（仅团tab时显示）
+        const boardEl = document.getElementById('home-board');
+        if (this.currentGroup) {
+          const groupCards = cards.filter(c => c.group === this.currentGroup);
+          const totalAmount = groupCards
+            .filter(c => c.status !== 'disbanded')
+            .reduce((sum, c) => sum + parseFloat(c.price || 0), 0);
+          const statusCounts = {};
+          Object.keys(STATUS_CONFIG).forEach(s => statusCounts[s] = 0);
+          groupCards.forEach(c => { statusCounts[c.status] = (statusCounts[c.status] || 0) + 1; });
+
+          boardEl.innerHTML = `
+            <div class="group-board">
+              <div class="board-title">📊 ${this.currentGroup} 看板</div>
+              <div class="board-stats">
+                <div class="board-stat">
+                  <div class="board-stat-value">${formatPrice(totalAmount)}</div>
+                  <div class="board-stat-label">累计金额</div>
+                </div>
+                ${Object.entries(STATUS_CONFIG).map(([key, cfg]) => `
+                  <div class="board-stat">
+                    <div class="board-stat-value" style="color: var(--status-${key})">${statusCounts[key] || 0}</div>
+                    <div class="board-stat-label">${cfg.label}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        } else {
+          boardEl.innerHTML = '';
+        }
+
+        // 渲染卡片列表
+        const contentEl = document.getElementById('home-content');
+        if (displayCards.length === 0) {
+          contentEl.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">🍃</div>
+              <div class="empty-state-text">还没有谷子记录<br>点击右下角 + 添加吧</div>
+            </div>
+          `;
+        } else {
+          contentEl.innerHTML = `
+            <div class="card-grid">
+              ${displayCards.map(card => this.renderCard(card)).join('')}
+            </div>
+          `;
+        }
+      },
+
+      renderCard(card) {
+        const status = STATUS_CONFIG[card.status] || STATUS_CONFIG.pending;
+        return `
+          <div class="card" onclick="app.viewCard('${card.id}')">
+            ${card.image
+              ? `<img class="card-image" src="${card.image}" alt="">`
+              : `<div class="card-image-placeholder">🎀</div>`
+            }
+            <div class="card-body">
+              <div class="card-name">${card.name}</div>
+              <div class="card-row">
+                <div class="card-price">${formatPrice(card.price)}</div>
+                <span class="card-status ${status.class}">${status.label}</span>
+              </div>
+              <div class="card-group">${card.group || ''}</div>
+            </div>
+          </div>
+        `;
+      },
+
+      switchGroup(group) {
+        this.currentGroup = group || null;
+        this.renderHome();
+        if (group) {
+          window.location.hash = `home/group/${encodeURIComponent(group)}`;
+        } else {
+          window.location.hash = 'home';
+        }
+      },
+
+      // ----- 我的页面 -----
+      renderMine() {
+        const cards = Storage.getAll();
+        const currentMonth = getCurrentMonthKey();
+
+        // 月度统计
+        const monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth);
+        const monthCount = monthCards.length;
+        const monthAmount = monthCards.reduce((sum, c) => sum + parseFloat(c.price || 0), 0);
+
+        // 累计统计
+        const totalCount = cards.length;
+        const totalAmount = cards.reduce((sum, c) => sum + parseFloat(c.price || 0), 0);
+
+        // 渲染统计面板
+        document.getElementById('stats-grid').innerHTML = `
+          <div class="stat-card" onclick="app.showMonthCards()">
+            <div class="stat-card-value">${monthCount}</div>
+            <div class="stat-card-label">${currentMonth}月吃谷</div>
+          </div>
+          <div class="stat-card" onclick="app.showMonthChart()">
+            <div class="stat-card-value">${formatPrice(monthAmount)}</div>
+            <div class="stat-card-label">${currentMonth}月交肾</div>
+          </div>
+          <div class="stat-card" onclick="app.showTotalCountChart()">
+            <div class="stat-card-value">${totalCount}</div>
+            <div class="stat-card-label">食量</div>
+          </div>
+          <div class="stat-card" onclick="app.showTotalAmountChart()">
+            <div class="stat-card-value">${formatPrice(totalAmount)}</div>
+            <div class="stat-card-label">肾款</div>
+          </div>
+        `;
+
+        // 团列表
+        const groups = {};
+        cards.forEach(c => {
+          if (!groups[c.group]) {
+            groups[c.group] = { arrived: 0, pending: 0, shipped: 0, disbanded: 0 };
+          }
+          groups[c.group][c.status] = (groups[c.group][c.status] || 0) + 1;
+        });
+
+        const groupListEl = document.getElementById('mine-group-list');
+        if (Object.keys(groups).length === 0) {
+          groupListEl.innerHTML = `
+            <div class="group-list-header">我的团</div>
+            <div style="padding: 20px; text-align: center; color: var(--text-light);">
+              还没有加入任何团
+            </div>
+          `;
+        } else {
+          groupListEl.innerHTML = `
+            <div class="group-list-header">我的团 (${Object.keys(groups).length})</div>
+            ${Object.entries(groups).map(([name, stats]) => `
+              <div class="group-list-item" onclick="app.switchGroup(${JSON.stringify(name).replace(/"/g, '&quot;')})">
+                <div class="group-list-item-name">${name}</div>
+                <div class="group-list-item-stats">
+                  <div class="group-list-item-stat">已到货 <span>${stats.arrived || 0}</span></div>
+                  <div class="group-list-item-stat">未到货 <span>${stats.pending || 0}</span></div>
+                  <div class="group-list-item-stat">已排发 <span>${stats.shipped || 0}</span></div>
+                </div>
+              </div>
+            `).join('')}
+          `;
+        }
+      },
+
+      // ----- 统计详情 -----
+      showMonthCards() {
+        const cards = Storage.getAll();
+        const currentMonth = getCurrentMonthKey();
+        const monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth)
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        this.showModal(`${currentMonth}月吃谷 (${monthCards.length})`, `
+          <div class="detail-list">
+            ${monthCards.map(c => `
+              <div class="detail-list-item" onclick="app.viewCard('${c.id}')">
+                ${c.image ? `<img src="${c.image}">` : `<div style="width:48px;height:48px;border-radius:8px;background:linear-gradient(135deg,#E1F5FE,#E8EAF6);display:flex;align-items:center;justify-content:center;font-size:20px;">🎀</div>`}
+                <div class="detail-list-item-info">
+                  <div class="detail-list-item-name">${c.name}</div>
+                  <div class="detail-list-item-meta">${c.group} · ${STATUS_CONFIG[c.status].label}</div>
+                </div>
+                <div class="detail-list-item-price">${formatPrice(c.price)}</div>
+              </div>
+            `).join('')}
+          </div>
+        `);
+      },
+
+      showMonthChart() {
+        const cards = Storage.getAll();
+        const currentMonth = getCurrentMonthKey();
+        const monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth);
+
+        // 按日聚合
+        const daily = {};
+        monthCards.forEach(c => {
+          const day = formatDate(c.createdAt);
+          daily[day] = (daily[day] || 0) + parseFloat(c.price || 0);
+        });
+
+        const days = Object.keys(daily).sort();
+        const values = days.map(d => daily[d]);
+
+        this.showModal(`${currentMonth}月交肾趋势`, `
+          <div class="chart-container">
+            <canvas id="chart-canvas"></canvas>
+          </div>
+        `);
+
+        this.renderChart(days, values, '每日金额', 'rgba(79, 195, 247, 0.8)', 'line');
+      },
+
+      showTotalCountChart() {
+        const cards = Storage.getAll();
+        const monthly = {};
+        cards.forEach(c => {
+          const mk = getMonthKey(c.createdAt);
+          monthly[mk] = (monthly[mk] || 0) + 1;
+        });
+
+        const months = Object.keys(monthly).sort();
+        const values = months.map(m => monthly[m]);
+
+        this.showModal('每月吃谷数量', `
+          <div class="chart-container">
+            <canvas id="chart-canvas"></canvas>
+          </div>
+        `);
+
+        this.renderChart(months, values, '卡片数量', 'rgba(102, 187, 106, 0.8)', 'line');
+      },
+
+      showTotalAmountChart() {
+        const cards = Storage.getAll();
+        const monthly = {};
+        cards.forEach(c => {
+          const mk = getMonthKey(c.createdAt);
+          monthly[mk] = (monthly[mk] || 0) + parseFloat(c.price || 0);
+        });
+
+        const months = Object.keys(monthly).sort();
+        const values = months.map(m => monthly[m]);
+
+        this.showModal('每月交肾金额', `
+          <div class="chart-container">
+            <canvas id="chart-canvas"></canvas>
+          </div>
+        `);
+
+        this.renderChart(months, values, '金额', 'rgba(66, 165, 245, 0.8)', 'line');
+      },
+
+      renderChart(labels, data, label, color, type) {
+        const ctx = document.getElementById('chart-canvas');
+        if (!ctx) return;
+
+        if (this.chartInstance) {
+          this.chartInstance.destroy();
+        }
+
+        this.chartInstance = new Chart(ctx, {
+          type: type,
+          data: {
+            labels,
+            datasets: [{
+              label,
+              data,
+              borderColor: color,
+              backgroundColor: color.replace('0.8', '0.15'),
+              borderWidth: 2,
+              fill: true,
+              tension: 0.4,
+              pointRadius: 4,
+              pointBackgroundColor: color,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: { color: 'rgba(0,0,0,0.05)' },
+                ticks: { font: { size: 11 } }
+              },
+              x: {
+                grid: { display: false },
+                ticks: { font: { size: 11 } }
+              }
+            }
+          }
+        });
+      },
+
+      // ----- 弹窗 -----
+      showModal(title, html) {
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-body').innerHTML = html;
+        document.getElementById('modal').classList.add('show');
+        document.body.style.overflow = 'hidden';
+      },
+
+      closeModal() {
+        document.getElementById('modal').classList.remove('show');
+        document.body.style.overflow = '';
+        if (this.chartInstance) {
+          this.chartInstance.destroy();
+          this.chartInstance = null;
+        }
+      },
+
+      // ----- 卡片表单 -----
+      newCard() {
+        this.resetForm();
+        window.location.hash = 'card/new';
+      },
+
+      editCard(id) {
+        const card = Storage.get(id);
+        if (!card) return;
+
+        this.editingId = id;
+        document.getElementById('card-form-title').textContent = '编辑谷子';
+        document.getElementById('card-id').value = id;
+        document.getElementById('card-name').value = card.name || '';
+        document.getElementById('card-price').value = card.price || '';
+        document.getElementById('card-group').value = card.group || '';
+        document.getElementById('card-status').value = card.status || 'pending';
+        document.getElementById('card-deadline').value = card.deadline || '';
+        document.getElementById('card-note').value = card.note || '';
+        document.getElementById('card-created').value = formatDate(card.createdAt);
+        document.getElementById('card-image-data').value = card.image || '';
+
+        // 图片预览
+        if (card.image) {
+          document.getElementById('card-image-preview').src = card.image;
+          document.getElementById('card-image-preview').style.display = 'block';
+          document.getElementById('image-placeholder').style.display = 'none';
+          document.getElementById('image-clear').style.display = 'flex';
+          document.getElementById('image-upload').classList.add('has-image');
+        }
+
+        // 状态选择
+        document.querySelectorAll('.status-option').forEach(btn => {
+          btn.classList.toggle('selected', btn.dataset.status === card.status);
+        });
+
+        document.getElementById('btn-delete').style.display = 'block';
+      },
+
+      resetForm() {
+        this.editingId = null;
+        document.getElementById('card-form').reset();
+        document.getElementById('card-form-title').textContent = '新增谷子';
+        document.getElementById('card-id').value = '';
+        document.getElementById('card-status').value = 'pending';
+        document.getElementById('card-created').value = formatDate(new Date());
+        document.getElementById('card-image-data').value = '';
+        document.getElementById('card-image-preview').style.display = 'none';
+        document.getElementById('image-placeholder').style.display = 'block';
+        document.getElementById('image-clear').style.display = 'none';
+        document.getElementById('image-upload').classList.remove('has-image');
+        document.getElementById('btn-delete').style.display = 'none';
+
+        document.querySelectorAll('.status-option').forEach(btn => {
+          btn.classList.toggle('selected', btn.dataset.status === 'pending');
+        });
+      },
+
+      viewCard(id) {
+        window.location.hash = `card/edit/${id}`;
+      },
+
+      handleImageUpload(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        if (file.size > 5 * 1024 * 1024) {
+          this.showToast('图片太大啦，请压缩后再试');
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = e => {
+          const data = e.target.result;
+          document.getElementById('card-image-data').value = data;
+          document.getElementById('card-image-preview').src = data;
+          document.getElementById('card-image-preview').style.display = 'block';
+          document.getElementById('image-placeholder').style.display = 'none';
+          document.getElementById('image-clear').style.display = 'flex';
+          document.getElementById('image-upload').classList.add('has-image');
+        };
+        reader.readAsDataURL(file);
+      },
+
+      clearImage() {
+        document.getElementById('card-image-data').value = '';
+        document.getElementById('card-image-preview').style.display = 'none';
+        document.getElementById('image-placeholder').style.display = 'block';
+        document.getElementById('image-clear').style.display = 'none';
+        document.getElementById('image-upload').classList.remove('has-image');
+        document.getElementById('card-image-input').value = '';
+      },
+
+      selectStatus(btn) {
+        document.querySelectorAll('.status-option').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('card-status').value = btn.dataset.status;
+      },
+
+      showGroupDropdown() {
+        this.filterGroups(document.getElementById('card-group').value);
+      },
+
+      filterGroups(query) {
+        const cards = Storage.getAll();
+        const groups = [...new Set(cards.map(c => c.group).filter(Boolean))];
+        const filtered = groups.filter(g => g.toLowerCase().includes((query || '').toLowerCase()));
+
+        const dropdown = document.getElementById('group-dropdown');
+        if (filtered.length === 0) {
+          dropdown.classList.remove('show');
+          return;
+        }
+
+        dropdown.innerHTML = filtered.map(g => `
+          <div class="group-dropdown-item" onclick="app.selectGroup(${JSON.stringify(g).replace(/"/g, '&quot;')})">${g}</div>
+        `).join('');
+        dropdown.classList.add('show');
+      },
+
+      selectGroup(group) {
+        document.getElementById('card-group').value = group;
+        document.getElementById('group-dropdown').classList.remove('show');
+      },
+
+      saveCard(e) {
+        e.preventDefault();
+
+        const name = document.getElementById('card-name').value.trim();
+        const price = parseFloat(document.getElementById('card-price').value) || 0;
+        const group = document.getElementById('card-group').value.trim();
+        const status = document.getElementById('card-status').value;
+        const deadline = document.getElementById('card-deadline').value;
+        const note = document.getElementById('card-note').value.trim();
+        const image = document.getElementById('card-image-data').value;
+        const createdDate = document.getElementById('card-created').value;
+
+        if (!name || name.length > 20) {
+          this.showToast('谷名需要在1-20字之间');
+          return;
+        }
+        if (!group) {
+          this.showToast('请选择或输入团名');
+          return;
+        }
+
+        const cardData = {
+          name,
+          price,
+          group,
+          status,
+          deadline,
+          note,
+          image,
+          createdAt: createdDate ? new Date(createdDate + 'T12:00:00').toISOString() : new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        if (this.editingId) {
+          Storage.update(this.editingId, cardData);
+          this.showToast('修改成功');
+        } else {
+          cardData.id = uuid();
+          Storage.add(cardData);
+          this.showToast('添加成功');
+        }
+
+        window.location.hash = 'home';
+        this.renderHome();
+        this.renderMine();
+      },
+
+      confirmDelete() {
+        document.getElementById('confirm-title').textContent = '确认删除?';
+        document.getElementById('confirm-text').textContent = '删除后无法恢复，确定要删除这个谷子吗？';
+        document.getElementById('confirm-btn').onclick = () => this.doDelete();
+        document.getElementById('confirm-dialog').classList.add('show');
+      },
+
+      doDelete() {
+        if (this.editingId) {
+          Storage.delete(this.editingId);
+          this.showToast('已删除');
+        }
+        this.closeConfirm();
+        window.location.hash = 'home';
+        this.renderHome();
+        this.renderMine();
+      },
+
+      closeConfirm() {
+        document.getElementById('confirm-dialog').classList.remove('show');
+      },
+
+      // ----- 数据导入导出 -----
+      exportData() {
+        const data = Storage.export();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `吃谷备份_${formatDate(new Date())}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.showToast('数据已导出');
+      },
+
+      importData(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = e => {
+          try {
+            const data = JSON.parse(e.target.result);
+            if (Storage.import(data)) {
+              this.showToast('数据导入成功');
+              this.renderHome();
+              this.renderMine();
+            } else {
+              this.showToast('数据格式不正确');
+            }
+          } catch {
+            this.showToast('文件解析失败');
+          }
+          input.value = '';
+        };
+        reader.readAsText(file);
+      },
+
+      // ----- Toast -----
+      showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2500);
+      }
+    };
+
+    // 启动
+    app.init();
+  </script>
+</body>
+</html>
