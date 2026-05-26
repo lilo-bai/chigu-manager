@@ -800,6 +800,70 @@
       color: var(--primary-dark);
     }
 
+    /* ===== 用户资料 ===== */
+    .user-profile {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 0 8px;
+      margin-bottom: 8px;
+    }
+
+    .user-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid var(--primary-light);
+      box-shadow: var(--shadow-sm);
+      cursor: pointer;
+      background: linear-gradient(135deg, #E1F5FE, #E8EAF6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      transition: all 0.2s;
+    }
+
+    .user-avatar:active {
+      transform: scale(0.95);
+    }
+
+    .user-signature {
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--text-light);
+      text-align: center;
+      padding: 6px 16px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.5);
+      cursor: pointer;
+      min-width: 120px;
+      transition: all 0.2s;
+      border: 1px dashed transparent;
+    }
+
+    .user-signature:hover {
+      border-color: var(--primary-light);
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .user-signature-empty {
+      color: var(--text-light);
+      opacity: 0.6;
+    }
+
+    .signature-input {
+      border: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--text);
+      text-align: center;
+      outline: none;
+      width: 100%;
+    }
+
     /* ===== 数据管理 ===== */
     .data-actions {
       margin-top: 24px;
@@ -952,12 +1016,13 @@
       <div class="header">
         <div class="header-title">我的</div>
       </div>
+      <div class="user-profile" id="user-profile"></div>
       <div class="stats-grid" id="stats-grid"></div>
       <div class="group-list" id="mine-group-list"></div>
       <div class="data-actions">
-        <button class="btn-secondary" onclick="app.exportData()">📥 导出数据备份</button>
+        <button class="btn-secondary" onclick="app.exportData()">📑 导出数据备份</button>
         <label class="btn-secondary" style="display:block;text-align:center;">
-          📤 导入数据恢复
+          📑 导入数据恢复
           <input type="file" class="hidden-file-input" accept=".json" onchange="app.importData(this)">
         </label>
       </div>
@@ -1007,10 +1072,10 @@
         <div class="form-group">
           <label class="form-label">谷子状态</label>
           <div class="status-selector">
-            <button type="button" class="status-option" data-status="pending" onclick="app.selectStatus(this)">🚚 未到货</button>
-            <button type="button" class="status-option" data-status="disbanded" onclick="app.selectStatus(this)">💨 已散</button>
-            <button type="button" class="status-option" data-status="arrived" onclick="app.selectStatus(this)">📦 已到货</button>
-            <button type="button" class="status-option" data-status="shipped" onclick="app.selectStatus(this)">✈️ 已排发</button>
+            <button type="button" class="status-option" data-status="pending" onclick="app.selectStatus(this)">💨 未到货</button>
+            <button type="button" class="status-option" data-status="disbanded" onclick="app.selectStatus(this)">🏳️ 已散</button>
+            <button type="button" class="status-option" data-status="arrived" onclick="app.selectStatus(this)">🍽️ 已到货</button>
+            <button type="button" class="status-option" data-status="shipped" onclick="app.selectStatus(this)">🍨 已排发</button>
           </div>
           <input type="hidden" id="card-status" value="pending">
         </div>
@@ -1080,10 +1145,10 @@
   <script>
     // ==================== 状态配置 ====================
     const STATUS_CONFIG = {
-      pending: { label: '未到货', class: 'status-pending', icon: '🚚' },
-      disbanded: { label: '已散', class: 'status-disbanded', icon: '💨' },
-      arrived: { label: '已到货', class: 'status-arrived', icon: '📦' },
-      shipped: { label: '已排发', class: 'status-shipped', icon: '✈️' }
+      pending: { label: '未到货', class: 'status-pending', icon: '💨' },
+      disbanded: { label: '已散', class: 'status-disbanded', icon: '🏳️' },
+      arrived: { label: '已到货', class: 'status-arrived', icon: '🍽️' },
+      shipped: { label: '已排发', class: 'status-shipped', icon: '🍨' }
     };
 
     // ==================== 数据层 ====================
@@ -1140,6 +1205,25 @@
           exportAt: new Date().toISOString(),
           cards: this.getAll()
         };
+      }
+    };
+
+    const UserStorage = {
+      KEY: 'chigu_user_v1',
+      get() {
+        try {
+          const data = localStorage.getItem(this.KEY);
+          return data ? JSON.parse(data) : {};
+        } catch {
+          return {};
+        }
+      },
+      save(data) {
+        localStorage.setItem(this.KEY, JSON.stringify(data));
+      },
+      update(updates) {
+        const data = this.get();
+        this.save({ ...data, ...updates });
       }
     };
 
@@ -1336,6 +1420,19 @@
       renderMine() {
         const cards = Storage.getAll();
         const currentMonth = getCurrentMonthKey();
+
+        // 渲染用户资料
+        const user = UserStorage.get();
+        document.getElementById('user-profile').innerHTML = `
+          <div class="user-avatar" onclick="document.getElementById('avatar-input').click()"
+               style="${user.avatar ? `background-image:url(${user.avatar});background-size:cover;background-position:center;` : ''}">
+            ${user.avatar ? '' : '👤'}
+          </div>
+          <input type="file" id="avatar-input" class="hidden-file-input" accept="image/*" onchange="app.handleAvatarUpload(this)">
+          <div class="user-signature" id="signature-display" onclick="app.editSignature()">
+            ${user.signature ? `<span>${user.signature}</span>` : '<span class="user-signature-empty">点击编辑个签</span>'}
+          </div>
+        `;
 
         // 月度统计
         const monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth);
@@ -1547,6 +1644,45 @@
           this.chartInstance.destroy();
           this.chartInstance = null;
         }
+      },
+
+      // ----- 用户资料 -----
+      handleAvatarUpload(input) {
+        const file = input.files[0];
+        if (!file) return;
+        if (file.size > 2 * 1024 * 1024) {
+          this.showToast('头像太大啦，请换一张');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = e => {
+          UserStorage.update({ avatar: e.target.result });
+          this.renderMine();
+          this.showToast('头像已更新');
+        };
+        reader.readAsDataURL(file);
+      },
+
+      editSignature() {
+        const user = UserStorage.get();
+        const display = document.getElementById('signature-display');
+        display.innerHTML = `<input type="text" class="signature-input" id="signature-input" value="${user.signature || ''}" placeholder="写一句个签..." maxlength="30">`;
+        const input = document.getElementById('signature-input');
+        input.focus();
+        input.select();
+
+        const save = () => {
+          const value = input.value.trim();
+          UserStorage.update({ signature: value });
+          this.renderMine();
+        };
+
+        input.addEventListener('blur', save, { once: true });
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            input.blur();
+          }
+        });
       },
 
       // ----- 卡片表单 -----
