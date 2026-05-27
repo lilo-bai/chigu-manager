@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>吃谷小管家</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
+  <script src="https://imgcache.qq.com/qcloud/tcbjs/1.12.2/tcb.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -1235,28 +1235,49 @@
       shipped: { label: '已排发', class: 'status-shipped', icon: '🍨' }
     };
 
-// ==================== LeanCloud 配置 ====================
-const LC_CONFIG = {
+// ==================== CloudBase 配置 ====================
+const CB_CONFIG = {
   enabled: false,
-  appId: '',
-  appKey: '',
-  serverURL: '',
+  env: '',
 };
 
-// ==================== LeanCloud 初始化 ====================
-function initLeanCloud() {
-  if (!LC_CONFIG.enabled || !LC_CONFIG.appId) return false;
+let cbApp = null;
+let cbDB = null;
+
+// ==================== CloudBase 初始化 ====================
+function initCloudBase() {
+  if (!CB_CONFIG.enabled || !CB_CONFIG.env) return false;
   try {
-    AV.init({
-      appId: LC_CONFIG.appId,
-      appKey: LC_CONFIG.appKey,
-      serverURL: LC_CONFIG.serverURL || undefined,
-    });
+    cbApp = cloudbase.init({ env: CB_CONFIG.env });
+    cbDB = cbApp.database();
     return true;
   } catch (e) {
-    console.error('LeanCloud init failed:', e);
+    console.error('CloudBase init failed:', e);
     return false;
   }
+}
+
+// ==================== 同步密钥管理 ====================
+function getSyncKey() {
+  return localStorage.getItem('chigu_sync_key');
+}
+
+function setSyncKey(key) {
+  if (key) localStorage.setItem('chigu_sync_key', key);
+  else localStorage.removeItem('chigu_sync_key');
+}
+
+function getOrCreateDeviceId() {
+  let id = localStorage.getItem('chigu_device_id');
+  if (!id) {
+    id = 'd_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('chigu_device_id', id);
+  }
+  return id;
+}
+
+function getUserKey() {
+  return getSyncKey() || getOrCreateDeviceId();
 }
 
 // ==================== 本地存储（降级方案）====================
@@ -1286,107 +1307,97 @@ const LocalStorage = {
   export() { return { version: 1, exportAt: new Date().toISOString(), cards: this.getAll() }; }
 };
 
-// ==================== LeanCloud 存储 ====================
-const LCStorage = {
+// ==================== CloudBase 存储 ====================
+const CBStorage = {
+  _collection() {
+    if (!cbDB) throw new Error('CloudBase not initialized');
+    return cbDB.collection('cards');
+  },
+  _doc(id) {
+    return this._collection().doc(id);
+  },
   async getAll() {
-    const query = new AV.Query('Card');
-    query.descending('createdAt');
-    query.limit(1000);
-    const results = await query.find();
-    return results.map(obj => ({
-      id: obj.id,
-      objectId: obj.id,
-      name: obj.get('name'),
-      price: obj.get('price'),
-      group: obj.get('group'),
-      status: obj.get('status'),
-      deadline: obj.get('deadline'),
-      note: obj.get('note'),
-      image: obj.get('image'),
-      imageUrl: obj.get('imageUrl'),
-      createdAt: obj.get('customCreatedAt') || obj.createdAt.toISOString(),
-      updatedAt: obj.updatedAt.toISOString(),
+    const key = getUserKey();
+    const { data } = await this._collection().where({ userKey: key }).orderBy('createdAt', 'desc').limit(1000).get();
+    return (data || []).map(doc => ({
+      id: doc._id,
+      objectId: doc._id,
+      name: doc.name,
+      price: doc.price,
+      group: doc.group,
+      status: doc.status,
+      deadline: doc.deadline || '',
+      note: doc.note || '',
+      image: doc.image || '',
+      createdAt: doc.createdAt || doc._createTime,
+      updatedAt: doc._updateTime || doc.createdAt,
     }));
   },
   async add(card) {
-    const Card = AV.Object.extend('Card');
-    const obj = new Card();
-    obj.set('name', card.name);
-    obj.set('price', card.price);
-    obj.set('group', card.group);
-    obj.set('status', card.status);
-    obj.set('deadline', card.deadline || '');
-    obj.set('note', card.note || '');
-    obj.set('customCreatedAt', new Date(card.createdAt));
-    if (card.image) {
-      if (card.image.startsWith('http')) {
-        obj.set('imageUrl', card.image);
-      } else {
-        const file = new AV.File(`img_${Date.now()}.jpg`, { base64: card.image.split(',')[1] || card.image });
-        await file.save();
-        obj.set('image', file.url());
-        obj.set('imageUrl', file.url());
-      }
-    }
-    const saved = await obj.save();
-    return { id: saved.id, objectId: saved.id, ...card };
+    const key = getUserKey();
+    const doc = {
+      name: card.name,
+      price: card.price,
+      group: card.group,
+      status: card.status,
+      deadline: card.deadline || '',
+      note: card.note || '',
+      image: card.image || '',
+      createdAt: card.createdAt,
+      userKey: key,
+    };
+    const { id } = await this._collection().add(doc);
+    return { id, objectId: id, ...card };
   },
   async update(id, updates) {
-    const obj = AV.Object.createWithoutData('Card', id);
-    if (updates.name) obj.set('name', updates.name);
-    if (updates.price !== undefined) obj.set('price', updates.price);
-    if (updates.group) obj.set('group', updates.group);
-    if (updates.status) obj.set('status', updates.status);
-    if (updates.deadline !== undefined) obj.set('deadline', updates.deadline);
-    if (updates.note !== undefined) obj.set('note', updates.note);
-    if (updates.createdAt) obj.set('customCreatedAt', new Date(updates.createdAt));
-    if (updates.image) {
-      if (updates.image.startsWith('http')) {
-        obj.set('imageUrl', updates.image);
-      } else {
-        const file = new AV.File(`img_${Date.now()}.jpg`, { base64: updates.image.split(',')[1] || updates.image });
-        await file.save();
-        obj.set('image', file.url());
-        obj.set('imageUrl', file.url());
-      }
-    }
-    await obj.save();
+    const patch = {};
+    if (updates.name !== undefined) patch.name = updates.name;
+    if (updates.price !== undefined) patch.price = updates.price;
+    if (updates.group !== undefined) patch.group = updates.group;
+    if (updates.status !== undefined) patch.status = updates.status;
+    if (updates.deadline !== undefined) patch.deadline = updates.deadline;
+    if (updates.note !== undefined) patch.note = updates.note;
+    if (updates.image !== undefined) patch.image = updates.image || '';
+    if (updates.createdAt !== undefined) patch.createdAt = updates.createdAt;
+    await this._doc(id).update(patch);
     return { id, ...updates };
   },
   async delete(id) {
-    const obj = AV.Object.createWithoutData('Card', id);
-    await obj.destroy();
+    await this._doc(id).remove();
   },
   async get(id) {
-    const obj = await new AV.Query('Card').get(id);
-    if (!obj) return null;
+    const { data } = await this._doc(id).get();
+    if (!data) return null;
     return {
-      id: obj.id,
-      objectId: obj.id,
-      name: obj.get('name'),
-      price: obj.get('price'),
-      group: obj.get('group'),
-      status: obj.get('status'),
-      deadline: obj.get('deadline'),
-      note: obj.get('note'),
-      image: obj.get('imageUrl') || obj.get('image'),
-      createdAt: obj.get('customCreatedAt') || obj.createdAt.toISOString(),
-      updatedAt: obj.updatedAt.toISOString(),
+      id: data._id,
+      objectId: data._id,
+      name: data.name,
+      price: data.price,
+      group: data.group,
+      status: data.status,
+      deadline: data.deadline || '',
+      note: data.note || '',
+      image: data.image || '',
+      createdAt: data.createdAt || data._createTime,
+      updatedAt: data._updateTime || data.createdAt,
     };
   },
   async import(data) {
     if (!Array.isArray(data)) return false;
+    const key = getUserKey();
     for (const card of data) {
-      const Card = AV.Object.extend('Card');
-      const obj = new Card();
-      obj.set('name', card.name);
-      obj.set('price', card.price);
-      obj.set('group', card.group);
-      obj.set('status', card.status || 'pending');
-      obj.set('deadline', card.deadline || '');
-      obj.set('note', card.note || '');
-      obj.set('customCreatedAt', new Date(card.createdAt || Date.now()));
-      await obj.save();
+      const doc = {
+        name: card.name,
+        price: card.price,
+        group: card.group,
+        status: card.status || 'pending',
+        deadline: card.deadline || '',
+        note: card.note || '',
+        image: card.image || '',
+        createdAt: card.createdAt || new Date().toISOString(),
+        userKey: key,
+      };
+      await this._collection().add(doc);
     }
     return true;
   },
@@ -1398,34 +1409,33 @@ const LCStorage = {
 
 // ==================== 统一存储接口 ====================
 const Storage = {
-  _lc: false,
-  useCloud() { return LC_CONFIG.enabled && AV.User.current(); },
+  useCloud() { return CB_CONFIG.enabled && !!cbDB; },
   async getAll() {
-    if (this.useCloud()) return await LCStorage.getAll();
+    if (this.useCloud()) return await CBStorage.getAll();
     return LocalStorage.getAll();
   },
   async add(card) {
-    if (this.useCloud()) return await LCStorage.add(card);
+    if (this.useCloud()) return await CBStorage.add(card);
     return LocalStorage.add(card);
   },
   async update(id, updates) {
-    if (this.useCloud()) return await LCStorage.update(id, updates);
+    if (this.useCloud()) return await CBStorage.update(id, updates);
     return LocalStorage.update(id, updates);
   },
   async delete(id) {
-    if (this.useCloud()) return await LCStorage.delete(id);
+    if (this.useCloud()) return await CBStorage.delete(id);
     return LocalStorage.delete(id);
   },
   async get(id) {
-    if (this.useCloud()) return await LCStorage.get(id);
+    if (this.useCloud()) return await CBStorage.get(id);
     return LocalStorage.get(id);
   },
   async import(data) {
-    if (this.useCloud()) return await LCStorage.import(data);
+    if (this.useCloud()) return await CBStorage.import(data);
     return LocalStorage.import(data);
   },
   async export() {
-    if (this.useCloud()) return await LCStorage.export();
+    if (this.useCloud()) return await CBStorage.export();
     return LocalStorage.export();
   }
 };
@@ -1477,14 +1487,14 @@ const UserStorage = {
       chartInstance: null,
 
       async init() {
-        const savedLC = localStorage.getItem('chigu_lc_config');
-        if (savedLC) {
+        const savedCB = localStorage.getItem('chigu_cb_config');
+        if (savedCB) {
           try {
-            const cfg = JSON.parse(savedLC);
-            Object.assign(LC_CONFIG, cfg);
+            const cfg = JSON.parse(savedCB);
+            Object.assign(CB_CONFIG, cfg);
           } catch {}
         }
-        initLeanCloud();
+        initCloudBase();
         await this.renderHome();
         this.renderMine();
         window.addEventListener('hashchange', () => this.handleRoute());
@@ -1643,10 +1653,8 @@ const UserStorage = {
       async renderMine() {
         const cards = await Storage.getAll();
         const currentMonth = getCurrentMonthKey();
-        let lcUser = null;
-        if (LC_CONFIG.enabled && typeof AV !== 'undefined') {
-          try { lcUser = AV.User.current(); } catch {}
-        }
+        const syncKey = getSyncKey();
+        const cbReady = CB_CONFIG.enabled && cbDB;
 
         // 渲染用户资料
         const user = UserStorage.get();
@@ -1664,31 +1672,30 @@ const UserStorage = {
         // 渲染云端面板
         const cloudEl = document.getElementById('cloud-panel');
         if (cloudEl) {
-          if (!LC_CONFIG.enabled) {
+          if (!cbReady) {
             cloudEl.innerHTML = `
               <div class="cloud-panel-header">
                 <div class="cloud-panel-title">☁️ 云端同步</div>
                 <span class="cloud-panel-status cloud-status-off">未启用</span>
               </div>
               <div class="cloud-panel-body">
-                数据目前保存在本机，换设备会丢失。启用 LeanCloud 云端后可跨设备同步。
+                数据目前保存在本机，换设备会丢失。启用 CloudBase 后数据保存到腾讯云，换设备输入同步码即可恢复。
                 <div class="cloud-btn-row">
                   <button class="cloud-btn cloud-btn-primary" onclick="app.showCloudSetup()">配置云端</button>
                 </div>
               </div>
             `;
-          } else if (!lcUser) {
+          } else if (!syncKey) {
             cloudEl.innerHTML = `
               <div class="cloud-panel-header">
                 <div class="cloud-panel-title">☁️ 云端同步</div>
-                <span class="cloud-panel-status cloud-status-err">未登录</span>
+                <span class="cloud-panel-status cloud-status-err">未绑定</span>
               </div>
               <div class="cloud-panel-body">
-                <input type="text" class="cloud-input" id="lc-username" placeholder="用户名">
-                <input type="password" class="cloud-input" id="lc-password" placeholder="密码">
+                CloudBase 已连接，请设置同步码来绑定数据。换设备输入相同同步码即可同步。
+                <input type="text" class="cloud-input" id="cb-sync-key" placeholder="设置同步码（用于跨设备）" maxlength="32">
                 <div class="cloud-btn-row">
-                  <button class="cloud-btn cloud-btn-primary" onclick="app.lcLogin()">登录</button>
-                  <button class="cloud-btn cloud-btn-secondary" onclick="app.lcRegister()">注册</button>
+                  <button class="cloud-btn cloud-btn-primary" onclick="app.bindSyncKey()">绑定</button>
                 </div>
               </div>
             `;
@@ -1699,10 +1706,10 @@ const UserStorage = {
                 <span class="cloud-panel-status cloud-status-on">已同步</span>
               </div>
               <div class="cloud-panel-body">
-                当前用户：<b>${lcUser.getUsername()}</b><br>
-                数据已保存到 LeanCloud 云端，可跨设备访问。
+                同步码：<b style="font-family:monospace;">${syncKey}</b><br>
+                数据已保存到 CloudBase，换设备输入此码即可恢复。
                 <div class="cloud-btn-row">
-                  <button class="cloud-btn cloud-btn-secondary" onclick="app.lcLogout()">退出登录</button>
+                  <button class="cloud-btn cloud-btn-secondary" onclick="app.unbindSyncKey()">解除绑定</button>
                 </div>
               </div>
             `;
@@ -1960,17 +1967,15 @@ const UserStorage = {
         });
       },
 
-      // ----- LeanCloud 云端 -----
+      // ----- CloudBase 云端 -----
       showCloudSetup() {
-        this.showModal('配置 LeanCloud', `
+        this.showModal('配置 CloudBase', `
           <div style="font-size:13px;color:var(--text-light);line-height:1.6;margin-bottom:12px;">
-            1. 前往 <a href="https://leancloud.cn" target="_blank" style="color:var(--primary-dark)">leancloud.cn</a> 注册并创建应用<br>
-            2. 在「应用设置」→「应用凭证」中获取 AppID 和 AppKey<br>
-            3. 国内版需绑定自定义 API 域名，填入 Server URL
+            1. 前往 <a href="https://console.cloud.tencent.com/tcb" target="_blank" style="color:var(--primary-dark)">腾讯云 CloudBase 控制台</a> 创建环境<br>
+            2. 在「环境」页面获取 环境 ID（EnvID）<br>
+            3. 到「数据库」创建集合 <code>cards</code>，权限设为「所有用户可读，仅创建者可写」或更开放
           </div>
-          <input type="text" class="cloud-input" id="setup-appid" placeholder="App ID">
-          <input type="text" class="cloud-input" id="setup-appkey" placeholder="App Key">
-          <input type="text" class="cloud-input" id="setup-server" placeholder="Server URL（国内版必填）">
+          <input type="text" class="cloud-input" id="setup-env" placeholder="CloudBase 环境 ID（如：xxx-xxx）">
           <div class="cloud-btn-row">
             <button class="cloud-btn cloud-btn-primary" onclick="app.saveCloudConfig()">保存并启用</button>
           </div>
@@ -1978,58 +1983,36 @@ const UserStorage = {
       },
 
       saveCloudConfig() {
-        const appId = document.getElementById('setup-appid').value.trim();
-        const appKey = document.getElementById('setup-appkey').value.trim();
-        const serverURL = document.getElementById('setup-server').value.trim();
-        if (!appId || !appKey) {
-          this.showToast('请填写 App ID 和 App Key');
+        const env = document.getElementById('setup-env').value.trim();
+        if (!env) {
+          this.showToast('请填写环境 ID');
           return;
         }
-        LC_CONFIG.appId = appId;
-        LC_CONFIG.appKey = appKey;
-        LC_CONFIG.serverURL = serverURL;
-        LC_CONFIG.enabled = true;
-        localStorage.setItem('chigu_lc_config', JSON.stringify(LC_CONFIG));
-        initLeanCloud();
+        CB_CONFIG.env = env;
+        CB_CONFIG.enabled = true;
+        localStorage.setItem('chigu_cb_config', JSON.stringify(CB_CONFIG));
+        const ok = initCloudBase();
         this.closeModal();
-        this.showToast('云端已启用，请登录');
+        if (ok) {
+          this.showToast('云端已启用，请绑定同步码');
+        } else {
+          this.showToast('连接失败，请检查环境 ID');
+        }
         this.renderMine();
       },
 
-      async lcLogin() {
-        const username = document.getElementById('lc-username').value.trim();
-        const password = document.getElementById('lc-password').value;
-        if (!username || !password) { this.showToast('请输入用户名和密码'); return; }
-        try {
-          await AV.User.logIn(username, password);
-          this.showToast('登录成功');
-          this.renderMine();
-          this.renderHome();
-        } catch (e) {
-          this.showToast('登录失败：' + (e.message || e));
-        }
+      bindSyncKey() {
+        const key = document.getElementById('cb-sync-key').value.trim();
+        if (!key) { this.showToast('请输入同步码'); return; }
+        setSyncKey(key);
+        this.showToast('同步码已绑定');
+        this.renderMine();
+        this.renderHome();
       },
 
-      async lcRegister() {
-        const username = document.getElementById('lc-username').value.trim();
-        const password = document.getElementById('lc-password').value;
-        if (!username || !password) { this.showToast('请输入用户名和密码'); return; }
-        try {
-          const user = new AV.User();
-          user.setUsername(username);
-          user.setPassword(password);
-          await user.signUp();
-          this.showToast('注册成功，已自动登录');
-          this.renderMine();
-          this.renderHome();
-        } catch (e) {
-          this.showToast('注册失败：' + (e.message || e));
-        }
-      },
-
-      async lcLogout() {
-        AV.User.logOut();
-        this.showToast('已退出');
+      unbindSyncKey() {
+        setSyncKey('');
+        this.showToast('已解除绑定（仍保存在本机）');
         this.renderMine();
         this.renderHome();
       },
