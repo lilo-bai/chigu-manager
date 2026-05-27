@@ -41,6 +41,8 @@
       background: var(--bg-gradient);
       background-attachment: fixed;
       color: var(--text);
+      -webkit-touch-callout: none;
+      touch-action: manipulation;
       overflow: hidden;
     }
 
@@ -343,6 +345,10 @@
 
     .nav-item.active {
       color: var(--primary);
+    }
+
+    .nav-item, button, .card, .tab, .group-list-item, .icon-btn, .status-option, .btn-primary, .btn-secondary, .cloud-btn {
+      touch-action: manipulation;
     }
 
     .nav-item-icon {
@@ -705,13 +711,17 @@
       background: rgba(0, 0, 0, 0.3);
       backdrop-filter: blur(5px);
       z-index: 200;
-      display: none;
+      display: flex;
       align-items: flex-end;
       justify-content: center;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.2s, visibility 0.2s;
     }
 
     .modal-overlay.show {
-      display: flex;
+      visibility: visible;
+      opacity: 1;
     }
 
     .modal-content {
@@ -966,14 +976,18 @@
       background: rgba(0, 0, 0, 0.4);
       backdrop-filter: blur(8px);
       z-index: 300;
-      display: none;
+      display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.2s, visibility 0.2s;
     }
 
     .confirm-dialog.show {
-      display: flex;
+      visibility: visible;
+      opacity: 1;
     }
 
     .confirm-box {
@@ -1499,16 +1513,20 @@ const UserStorage = {
       chartInstance: null,
 
       async init() {
-        const savedCB = localStorage.getItem('chigu_cb_config');
-        if (savedCB) {
-          try {
-            const cfg = JSON.parse(savedCB);
-            Object.assign(CB_CONFIG, cfg);
-          } catch {}
+        try {
+          const savedCB = localStorage.getItem('chigu_cb_config');
+          if (savedCB) {
+            try {
+              const cfg = JSON.parse(savedCB);
+              Object.assign(CB_CONFIG, cfg);
+            } catch {}
+          }
+          initCloudBase();
+          await this.renderHome();
+          this.renderMine();
+        } catch (err) {
+          console.error('init error:', err);
         }
-        initCloudBase();
-        await this.renderHome();
-        this.renderMine();
         window.addEventListener('hashchange', () => this.handleRoute());
         this.handleRoute();
 
@@ -1538,25 +1556,29 @@ const UserStorage = {
 
         this.currentPage = page;
 
-        if (page === 'home' || page === '') {
-          document.getElementById('page-home').classList.add('active');
-          document.querySelectorAll('.nav-item')[0].classList.add('active');
-          this.currentGroup = sub === 'group' ? decodeURIComponent(rest[0] || '') : null;
-          await this.renderHome();
-          document.getElementById('fab').style.display = 'flex';
-        } else if (page === 'mine') {
-          document.getElementById('page-mine').classList.add('active');
-          document.querySelectorAll('.nav-item')[1].classList.add('active');
-          await this.renderMine();
-          document.getElementById('fab').style.display = 'none';
-        } else if (page === 'card') {
-          document.getElementById('page-card').classList.add('active');
-          document.getElementById('fab').style.display = 'none';
-          if (sub === 'edit') {
-            await this.editCard(rest[0]);
-          } else {
-            this.resetForm();
+        try {
+          if (page === 'home' || page === '') {
+            document.getElementById('page-home').classList.add('active');
+            document.querySelectorAll('.nav-item')[0].classList.add('active');
+            this.currentGroup = sub === 'group' ? decodeURIComponent(rest[0] || '') : null;
+            await this.renderHome();
+            document.getElementById('fab').style.display = 'flex';
+          } else if (page === 'mine') {
+            document.getElementById('page-mine').classList.add('active');
+            document.querySelectorAll('.nav-item')[1].classList.add('active');
+            await this.renderMine();
+            document.getElementById('fab').style.display = 'none';
+          } else if (page === 'card') {
+            document.getElementById('page-card').classList.add('active');
+            document.getElementById('fab').style.display = 'none';
+            if (sub === 'edit') {
+              await this.editCard(rest[0]);
+            } else {
+              this.resetForm();
+            }
           }
+        } catch (err) {
+          console.error('route error:', err);
         }
       },
 
