@@ -1258,13 +1258,25 @@ function initCloudBase() {
 }
 
 // ==================== 同步密钥管理 ====================
+// 用户输入 CN + ID，存储为 JSON { cn, id }，实际 userKey = `${cn}#${id}`
+function getSyncKeyObj() {
+  try {
+    const raw = localStorage.getItem('chigu_sync_key');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
 function getSyncKey() {
-  return localStorage.getItem('chigu_sync_key');
+  const obj = getSyncKeyObj();
+  return obj && obj.cn && obj.id ? obj.cn + '#' + obj.id : '';
 }
 
 function setSyncKey(key) {
-  if (key) localStorage.setItem('chigu_sync_key', key);
-  else localStorage.removeItem('chigu_sync_key');
+  if (key && typeof key === 'object' && key.cn && key.id) {
+    localStorage.setItem('chigu_sync_key', JSON.stringify(key));
+  } else {
+    localStorage.removeItem('chigu_sync_key');
+  }
 }
 
 function getOrCreateDeviceId() {
@@ -1653,7 +1665,7 @@ const UserStorage = {
       async renderMine() {
         const cards = await Storage.getAll();
         const currentMonth = getCurrentMonthKey();
-        const syncKey = getSyncKey();
+        const syncObj = getSyncKeyObj();
         const cbReady = CB_CONFIG.enabled && cbDB;
 
         // 渲染用户资料
@@ -1667,6 +1679,12 @@ const UserStorage = {
           <div class="user-signature" id="signature-display" onclick="app.editSignature()">
             ${user.signature ? `<span>${user.signature}</span>` : '<span class="user-signature-empty">点击编辑个签</span>'}
           </div>
+          ${syncObj && syncObj.cn
+            ? `<div style="display:flex;gap:8px;margin-top:8px;font-size:13px;color:var(--text-light);">
+                 <span style="background:rgba(79,195,247,0.1);padding:4px 12px;border-radius:12px;font-weight:600;color:var(--primary-dark);">CN：${syncObj.cn}</span>
+                 <span style="background:rgba(79,195,247,0.1);padding:4px 12px;border-radius:12px;font-weight:600;color:var(--primary-dark);">ID：${syncObj.id}</span>
+               </div>`
+            : ''}
         `;
 
         // 渲染云端面板
@@ -1685,15 +1703,16 @@ const UserStorage = {
                 </div>
               </div>
             `;
-          } else if (!syncKey) {
+          } else if (!syncObj) {
             cloudEl.innerHTML = `
               <div class="cloud-panel-header">
                 <div class="cloud-panel-title">☁️ 云端同步</div>
                 <span class="cloud-panel-status cloud-status-err">未绑定</span>
               </div>
               <div class="cloud-panel-body">
-                CloudBase 已连接，请设置同步码来绑定数据。换设备输入相同同步码即可同步。
-                <input type="text" class="cloud-input" id="cb-sync-key" placeholder="设置同步码（用于跨设备）" maxlength="32">
+                CloudBase 已连接，请设置 CN 和 ID 来绑定数据。换设备输入相同即可同步。
+                <input type="text" class="cloud-input" id="cb-sync-cn" placeholder="CN（圈名）" maxlength="16">
+                <input type="text" class="cloud-input" id="cb-sync-id" placeholder="ID（自定义数字/字母）" maxlength="16">
                 <div class="cloud-btn-row">
                   <button class="cloud-btn cloud-btn-primary" onclick="app.bindSyncKey()">绑定</button>
                 </div>
@@ -1706,8 +1725,8 @@ const UserStorage = {
                 <span class="cloud-panel-status cloud-status-on">已同步</span>
               </div>
               <div class="cloud-panel-body">
-                同步码：<b style="font-family:monospace;">${syncKey}</b><br>
-                数据已保存到 CloudBase，换设备输入此码即可恢复。
+                同步中：<b>${syncObj ? syncObj.cn : ''}</b> # <b>${syncObj ? syncObj.id : ''}</b><br>
+                数据已保存到 CloudBase，换设备输入相同 CN+ID 即可恢复。
                 <div class="cloud-btn-row">
                   <button class="cloud-btn cloud-btn-secondary" onclick="app.unbindSyncKey()">解除绑定</button>
                 </div>
@@ -2002,9 +2021,10 @@ const UserStorage = {
       },
 
       bindSyncKey() {
-        const key = document.getElementById('cb-sync-key').value.trim();
-        if (!key) { this.showToast('请输入同步码'); return; }
-        setSyncKey(key);
+        const cn = document.getElementById('cb-sync-cn').value.trim();
+        const idVal = document.getElementById('cb-sync-id').value.trim();
+        if (!cn || !idVal) { this.showToast('请填写 CN 和 ID'); return; }
+        setSyncKey({ cn, id: idVal });
         this.showToast('同步码已绑定');
         this.renderMine();
         this.renderHome();
