@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>吃谷小管家</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -864,6 +865,88 @@
       width: 100%;
     }
 
+    /* ===== 云端设置 ===== */
+    .cloud-panel {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--card-border);
+    }
+
+    .cloud-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .cloud-panel-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .cloud-panel-status {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+
+    .cloud-status-off { background: #ECEFF1; color: var(--text-light); }
+    .cloud-status-on  { background: #E8F5E9; color: #43A047; }
+    .cloud-status-err { background: #FFEBEE; color: #E53935; }
+
+    .cloud-panel-body {
+      font-size: 13px;
+      color: var(--text-light);
+      line-height: 1.5;
+    }
+
+    .cloud-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid rgba(79, 195, 247, 0.2);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.6);
+      font-size: 13px;
+      font-family: inherit;
+      margin-top: 8px;
+      outline: none;
+    }
+
+    .cloud-input:focus { border-color: var(--primary); }
+
+    .cloud-btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .cloud-btn {
+      flex: 1;
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      border: none;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .cloud-btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+    }
+
+    .cloud-btn-secondary {
+      background: rgba(0, 0, 0, 0.05);
+      color: var(--text);
+    }
+
     /* ===== 数据管理 ===== */
     .data-actions {
       margin-top: 24px;
@@ -1017,6 +1100,7 @@
         <div class="header-title">我的</div>
       </div>
       <div class="user-profile" id="user-profile"></div>
+      <div id="cloud-panel"></div>
       <div class="stats-grid" id="stats-grid"></div>
       <div class="group-list" id="mine-group-list"></div>
       <div class="data-actions">
@@ -1151,81 +1235,212 @@
       shipped: { label: '已排发', class: 'status-shipped', icon: '🍨' }
     };
 
-    // ==================== 数据层 ====================
-    const Storage = {
-      KEY: 'chigu_cards_v1',
-      getAll() {
-        try {
-          const data = localStorage.getItem(this.KEY);
-          return data ? JSON.parse(data) : [];
-        } catch {
-          return [];
-        }
-      },
-      save(cards) {
-        localStorage.setItem(this.KEY, JSON.stringify(cards));
-      },
-      add(card) {
-        const cards = this.getAll();
-        cards.push(card);
-        this.save(cards);
-        return card;
-      },
-      update(id, updates) {
-        const cards = this.getAll();
-        const idx = cards.findIndex(c => c.id === id);
-        if (idx >= 0) {
-          cards[idx] = { ...cards[idx], ...updates, updatedAt: new Date().toISOString() };
-          this.save(cards);
-          return cards[idx];
-        }
-        return null;
-      },
-      delete(id) {
-        const cards = this.getAll().filter(c => c.id !== id);
-        this.save(cards);
-      },
-      get(id) {
-        return this.getAll().find(c => c.id === id);
-      },
-      import(data) {
-        if (Array.isArray(data)) {
-          this.save(data);
-          return true;
-        }
-        if (data && Array.isArray(data.cards)) {
-          this.save(data.cards);
-          return true;
-        }
-        return false;
-      },
-      export() {
-        return {
-          version: 1,
-          exportAt: new Date().toISOString(),
-          cards: this.getAll()
-        };
-      }
-    };
+// ==================== LeanCloud 配置 ====================
+const LC_CONFIG = {
+  enabled: false,
+  appId: '',
+  appKey: '',
+  serverURL: '',
+};
 
-    const UserStorage = {
-      KEY: 'chigu_user_v1',
-      get() {
-        try {
-          const data = localStorage.getItem(this.KEY);
-          return data ? JSON.parse(data) : {};
-        } catch {
-          return {};
-        }
-      },
-      save(data) {
-        localStorage.setItem(this.KEY, JSON.stringify(data));
-      },
-      update(updates) {
-        const data = this.get();
-        this.save({ ...data, ...updates });
+// ==================== LeanCloud 初始化 ====================
+function initLeanCloud() {
+  if (!LC_CONFIG.enabled || !LC_CONFIG.appId) return false;
+  try {
+    AV.init({
+      appId: LC_CONFIG.appId,
+      appKey: LC_CONFIG.appKey,
+      serverURL: LC_CONFIG.serverURL || undefined,
+    });
+    return true;
+  } catch (e) {
+    console.error('LeanCloud init failed:', e);
+    return false;
+  }
+}
+
+// ==================== 本地存储（降级方案）====================
+const LocalStorage = {
+  KEY: 'chigu_cards_v1',
+  getAll() {
+    try {
+      const data = localStorage.getItem(this.KEY);
+      return data ? JSON.parse(data) : [];
+    } catch { return []; }
+  },
+  save(cards) { localStorage.setItem(this.KEY, JSON.stringify(cards)); },
+  add(card) { const cards = this.getAll(); cards.push(card); this.save(cards); return card; },
+  update(id, updates) {
+    const cards = this.getAll();
+    const idx = cards.findIndex(c => c.id === id);
+    if (idx >= 0) { cards[idx] = { ...cards[idx], ...updates, updatedAt: new Date().toISOString() }; this.save(cards); return cards[idx]; }
+    return null;
+  },
+  delete(id) { this.save(this.getAll().filter(c => c.id !== id)); },
+  get(id) { return this.getAll().find(c => c.id === id); },
+  import(data) {
+    if (Array.isArray(data)) { this.save(data); return true; }
+    if (data && Array.isArray(data.cards)) { this.save(data.cards); return true; }
+    return false;
+  },
+  export() { return { version: 1, exportAt: new Date().toISOString(), cards: this.getAll() }; }
+};
+
+// ==================== LeanCloud 存储 ====================
+const LCStorage = {
+  async getAll() {
+    const query = new AV.Query('Card');
+    query.descending('createdAt');
+    query.limit(1000);
+    const results = await query.find();
+    return results.map(obj => ({
+      id: obj.id,
+      objectId: obj.id,
+      name: obj.get('name'),
+      price: obj.get('price'),
+      group: obj.get('group'),
+      status: obj.get('status'),
+      deadline: obj.get('deadline'),
+      note: obj.get('note'),
+      image: obj.get('image'),
+      imageUrl: obj.get('imageUrl'),
+      createdAt: obj.get('customCreatedAt') || obj.createdAt.toISOString(),
+      updatedAt: obj.updatedAt.toISOString(),
+    }));
+  },
+  async add(card) {
+    const Card = AV.Object.extend('Card');
+    const obj = new Card();
+    obj.set('name', card.name);
+    obj.set('price', card.price);
+    obj.set('group', card.group);
+    obj.set('status', card.status);
+    obj.set('deadline', card.deadline || '');
+    obj.set('note', card.note || '');
+    obj.set('customCreatedAt', new Date(card.createdAt));
+    if (card.image) {
+      if (card.image.startsWith('http')) {
+        obj.set('imageUrl', card.image);
+      } else {
+        const file = new AV.File(`img_${Date.now()}.jpg`, { base64: card.image.split(',')[1] || card.image });
+        await file.save();
+        obj.set('image', file.url());
+        obj.set('imageUrl', file.url());
       }
+    }
+    const saved = await obj.save();
+    return { id: saved.id, objectId: saved.id, ...card };
+  },
+  async update(id, updates) {
+    const obj = AV.Object.createWithoutData('Card', id);
+    if (updates.name) obj.set('name', updates.name);
+    if (updates.price !== undefined) obj.set('price', updates.price);
+    if (updates.group) obj.set('group', updates.group);
+    if (updates.status) obj.set('status', updates.status);
+    if (updates.deadline !== undefined) obj.set('deadline', updates.deadline);
+    if (updates.note !== undefined) obj.set('note', updates.note);
+    if (updates.createdAt) obj.set('customCreatedAt', new Date(updates.createdAt));
+    if (updates.image) {
+      if (updates.image.startsWith('http')) {
+        obj.set('imageUrl', updates.image);
+      } else {
+        const file = new AV.File(`img_${Date.now()}.jpg`, { base64: updates.image.split(',')[1] || updates.image });
+        await file.save();
+        obj.set('image', file.url());
+        obj.set('imageUrl', file.url());
+      }
+    }
+    await obj.save();
+    return { id, ...updates };
+  },
+  async delete(id) {
+    const obj = AV.Object.createWithoutData('Card', id);
+    await obj.destroy();
+  },
+  async get(id) {
+    const obj = await new AV.Query('Card').get(id);
+    if (!obj) return null;
+    return {
+      id: obj.id,
+      objectId: obj.id,
+      name: obj.get('name'),
+      price: obj.get('price'),
+      group: obj.get('group'),
+      status: obj.get('status'),
+      deadline: obj.get('deadline'),
+      note: obj.get('note'),
+      image: obj.get('imageUrl') || obj.get('image'),
+      createdAt: obj.get('customCreatedAt') || obj.createdAt.toISOString(),
+      updatedAt: obj.updatedAt.toISOString(),
     };
+  },
+  async import(data) {
+    if (!Array.isArray(data)) return false;
+    for (const card of data) {
+      const Card = AV.Object.extend('Card');
+      const obj = new Card();
+      obj.set('name', card.name);
+      obj.set('price', card.price);
+      obj.set('group', card.group);
+      obj.set('status', card.status || 'pending');
+      obj.set('deadline', card.deadline || '');
+      obj.set('note', card.note || '');
+      obj.set('customCreatedAt', new Date(card.createdAt || Date.now()));
+      await obj.save();
+    }
+    return true;
+  },
+  async export() {
+    const cards = await this.getAll();
+    return { version: 1, exportAt: new Date().toISOString(), cards };
+  }
+};
+
+// ==================== 统一存储接口 ====================
+const Storage = {
+  _lc: false,
+  useCloud() { return LC_CONFIG.enabled && AV.User.current(); },
+  async getAll() {
+    if (this.useCloud()) return await LCStorage.getAll();
+    return LocalStorage.getAll();
+  },
+  async add(card) {
+    if (this.useCloud()) return await LCStorage.add(card);
+    return LocalStorage.add(card);
+  },
+  async update(id, updates) {
+    if (this.useCloud()) return await LCStorage.update(id, updates);
+    return LocalStorage.update(id, updates);
+  },
+  async delete(id) {
+    if (this.useCloud()) return await LCStorage.delete(id);
+    return LocalStorage.delete(id);
+  },
+  async get(id) {
+    if (this.useCloud()) return await LCStorage.get(id);
+    return LocalStorage.get(id);
+  },
+  async import(data) {
+    if (this.useCloud()) return await LCStorage.import(data);
+    return LocalStorage.import(data);
+  },
+  async export() {
+    if (this.useCloud()) return await LCStorage.export();
+    return LocalStorage.export();
+  }
+};
+
+const UserStorage = {
+  KEY: 'chigu_user_v1',
+  get() {
+    try {
+      const data = localStorage.getItem(this.KEY);
+      return data ? JSON.parse(data) : {};
+    } catch { return {}; }
+  },
+  save(data) { localStorage.setItem(this.KEY, JSON.stringify(data)); },
+  update(updates) { this.save({ ...this.get(), ...updates }); }
+};
 
     // ==================== 工具函数 ====================
     function uuid() {
@@ -1261,8 +1476,16 @@
       editingId: null,
       chartInstance: null,
 
-      init() {
-        this.renderHome();
+      async init() {
+        const savedLC = localStorage.getItem('chigu_lc_config');
+        if (savedLC) {
+          try {
+            const cfg = JSON.parse(savedLC);
+            Object.assign(LC_CONFIG, cfg);
+          } catch {}
+        }
+        initLeanCloud();
+        await this.renderHome();
         this.renderMine();
         window.addEventListener('hashchange', () => this.handleRoute());
         this.handleRoute();
@@ -1284,11 +1507,10 @@
         history.back();
       },
 
-      handleRoute() {
+      async handleRoute() {
         const hash = window.location.hash.replace('#', '') || 'home';
         const [page, sub, ...rest] = hash.split('/');
 
-        // 隐藏所有页面
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
@@ -1298,18 +1520,18 @@
           document.getElementById('page-home').classList.add('active');
           document.querySelectorAll('.nav-item')[0].classList.add('active');
           this.currentGroup = sub === 'group' ? decodeURIComponent(rest[0] || '') : null;
-          this.renderHome();
+          await this.renderHome();
           document.getElementById('fab').style.display = 'flex';
         } else if (page === 'mine') {
           document.getElementById('page-mine').classList.add('active');
           document.querySelectorAll('.nav-item')[1].classList.add('active');
-          this.renderMine();
+          await this.renderMine();
           document.getElementById('fab').style.display = 'none';
         } else if (page === 'card') {
           document.getElementById('page-card').classList.add('active');
           document.getElementById('fab').style.display = 'none';
           if (sub === 'edit') {
-            this.editCard(rest[0]);
+            await this.editCard(rest[0]);
           } else {
             this.resetForm();
           }
@@ -1317,8 +1539,8 @@
       },
 
       // ----- 首页 -----
-      renderHome() {
-        const cards = Storage.getAll();
+      async renderHome() {
+        const cards = await Storage.getAll();
         const groups = [...new Set(cards.map(c => c.group).filter(Boolean))];
         const allGroups = ['全部', ...groups];
 
@@ -1388,10 +1610,11 @@
 
       renderCard(card) {
         const status = STATUS_CONFIG[card.status] || STATUS_CONFIG.pending;
+        const imgUrl = card.image || card.imageUrl;
         return `
           <div class="card" onclick="app.viewCard('${card.id}')">
-            ${card.image
-              ? `<img class="card-image" src="${card.image}" alt="">`
+            ${imgUrl
+              ? `<img class="card-image" src="${imgUrl}" alt="">`
               : `<div class="card-image-placeholder">🎀</div>`
             }
             <div class="card-body">
@@ -1417,9 +1640,13 @@
       },
 
       // ----- 我的页面 -----
-      renderMine() {
-        const cards = Storage.getAll();
+      async renderMine() {
+        const cards = await Storage.getAll();
         const currentMonth = getCurrentMonthKey();
+        let lcUser = null;
+        if (LC_CONFIG.enabled && typeof AV !== 'undefined') {
+          try { lcUser = AV.User.current(); } catch {}
+        }
 
         // 渲染用户资料
         const user = UserStorage.get();
@@ -1433,6 +1660,54 @@
             ${user.signature ? `<span>${user.signature}</span>` : '<span class="user-signature-empty">点击编辑个签</span>'}
           </div>
         `;
+
+        // 渲染云端面板
+        const cloudEl = document.getElementById('cloud-panel');
+        if (cloudEl) {
+          if (!LC_CONFIG.enabled) {
+            cloudEl.innerHTML = `
+              <div class="cloud-panel-header">
+                <div class="cloud-panel-title">☁️ 云端同步</div>
+                <span class="cloud-panel-status cloud-status-off">未启用</span>
+              </div>
+              <div class="cloud-panel-body">
+                数据目前保存在本机，换设备会丢失。启用 LeanCloud 云端后可跨设备同步。
+                <div class="cloud-btn-row">
+                  <button class="cloud-btn cloud-btn-primary" onclick="app.showCloudSetup()">配置云端</button>
+                </div>
+              </div>
+            `;
+          } else if (!lcUser) {
+            cloudEl.innerHTML = `
+              <div class="cloud-panel-header">
+                <div class="cloud-panel-title">☁️ 云端同步</div>
+                <span class="cloud-panel-status cloud-status-err">未登录</span>
+              </div>
+              <div class="cloud-panel-body">
+                <input type="text" class="cloud-input" id="lc-username" placeholder="用户名">
+                <input type="password" class="cloud-input" id="lc-password" placeholder="密码">
+                <div class="cloud-btn-row">
+                  <button class="cloud-btn cloud-btn-primary" onclick="app.lcLogin()">登录</button>
+                  <button class="cloud-btn cloud-btn-secondary" onclick="app.lcRegister()">注册</button>
+                </div>
+              </div>
+            `;
+          } else {
+            cloudEl.innerHTML = `
+              <div class="cloud-panel-header">
+                <div class="cloud-panel-title">☁️ 云端同步</div>
+                <span class="cloud-panel-status cloud-status-on">已同步</span>
+              </div>
+              <div class="cloud-panel-body">
+                当前用户：<b>${lcUser.getUsername()}</b><br>
+                数据已保存到 LeanCloud 云端，可跨设备访问。
+                <div class="cloud-btn-row">
+                  <button class="cloud-btn cloud-btn-secondary" onclick="app.lcLogout()">退出登录</button>
+                </div>
+              </div>
+            `;
+          }
+        }
 
         // 月度统计
         const monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth);
@@ -1498,8 +1773,8 @@
       },
 
       // ----- 统计详情 -----
-      showMonthCards() {
-        const cards = Storage.getAll();
+      async showMonthCards() {
+        const cards = await Storage.getAll();
         const currentMonth = getCurrentMonthKey();
         const monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth)
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -1520,8 +1795,8 @@
         `);
       },
 
-      showMonthChart() {
-        const cards = Storage.getAll();
+      async showMonthChart() {
+        const cards = await Storage.getAll();
         const currentMonth = getCurrentMonthKey();
         const monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth);
 
@@ -1544,8 +1819,8 @@
         this.renderChart(days, values, '每日金额', 'rgba(79, 195, 247, 0.8)', 'line');
       },
 
-      showTotalCountChart() {
-        const cards = Storage.getAll();
+      async showTotalCountChart() {
+        const cards = await Storage.getAll();
         const monthly = {};
         cards.forEach(c => {
           const mk = getMonthKey(c.createdAt);
@@ -1564,8 +1839,8 @@
         this.renderChart(months, values, '卡片数量', 'rgba(102, 187, 106, 0.8)', 'line');
       },
 
-      showTotalAmountChart() {
-        const cards = Storage.getAll();
+      async showTotalAmountChart() {
+        const cards = await Storage.getAll();
         const monthly = {};
         cards.forEach(c => {
           const mk = getMonthKey(c.createdAt);
@@ -1685,14 +1960,88 @@
         });
       },
 
+      // ----- LeanCloud 云端 -----
+      showCloudSetup() {
+        this.showModal('配置 LeanCloud', `
+          <div style="font-size:13px;color:var(--text-light);line-height:1.6;margin-bottom:12px;">
+            1. 前往 <a href="https://leancloud.cn" target="_blank" style="color:var(--primary-dark)">leancloud.cn</a> 注册并创建应用<br>
+            2. 在「应用设置」→「应用凭证」中获取 AppID 和 AppKey<br>
+            3. 国内版需绑定自定义 API 域名，填入 Server URL
+          </div>
+          <input type="text" class="cloud-input" id="setup-appid" placeholder="App ID">
+          <input type="text" class="cloud-input" id="setup-appkey" placeholder="App Key">
+          <input type="text" class="cloud-input" id="setup-server" placeholder="Server URL（国内版必填）">
+          <div class="cloud-btn-row">
+            <button class="cloud-btn cloud-btn-primary" onclick="app.saveCloudConfig()">保存并启用</button>
+          </div>
+        `);
+      },
+
+      saveCloudConfig() {
+        const appId = document.getElementById('setup-appid').value.trim();
+        const appKey = document.getElementById('setup-appkey').value.trim();
+        const serverURL = document.getElementById('setup-server').value.trim();
+        if (!appId || !appKey) {
+          this.showToast('请填写 App ID 和 App Key');
+          return;
+        }
+        LC_CONFIG.appId = appId;
+        LC_CONFIG.appKey = appKey;
+        LC_CONFIG.serverURL = serverURL;
+        LC_CONFIG.enabled = true;
+        localStorage.setItem('chigu_lc_config', JSON.stringify(LC_CONFIG));
+        initLeanCloud();
+        this.closeModal();
+        this.showToast('云端已启用，请登录');
+        this.renderMine();
+      },
+
+      async lcLogin() {
+        const username = document.getElementById('lc-username').value.trim();
+        const password = document.getElementById('lc-password').value;
+        if (!username || !password) { this.showToast('请输入用户名和密码'); return; }
+        try {
+          await AV.User.logIn(username, password);
+          this.showToast('登录成功');
+          this.renderMine();
+          this.renderHome();
+        } catch (e) {
+          this.showToast('登录失败：' + (e.message || e));
+        }
+      },
+
+      async lcRegister() {
+        const username = document.getElementById('lc-username').value.trim();
+        const password = document.getElementById('lc-password').value;
+        if (!username || !password) { this.showToast('请输入用户名和密码'); return; }
+        try {
+          const user = new AV.User();
+          user.setUsername(username);
+          user.setPassword(password);
+          await user.signUp();
+          this.showToast('注册成功，已自动登录');
+          this.renderMine();
+          this.renderHome();
+        } catch (e) {
+          this.showToast('注册失败：' + (e.message || e));
+        }
+      },
+
+      async lcLogout() {
+        AV.User.logOut();
+        this.showToast('已退出');
+        this.renderMine();
+        this.renderHome();
+      },
+
       // ----- 卡片表单 -----
       newCard() {
         this.resetForm();
         window.location.hash = 'card/new';
       },
 
-      editCard(id) {
-        const card = Storage.get(id);
+      async editCard(id) {
+        const card = await Storage.get(id);
         if (!card) return;
 
         this.editingId = id;
@@ -1810,7 +2159,7 @@
         document.getElementById('group-dropdown').classList.remove('show');
       },
 
-      saveCard(e) {
+      async saveCard(e) {
         e.preventDefault();
 
         const name = document.getElementById('card-name').value.trim();
@@ -1844,11 +2193,11 @@
         };
 
         if (this.editingId) {
-          Storage.update(this.editingId, cardData);
+          await Storage.update(this.editingId, cardData);
           this.showToast('修改成功');
         } else {
           cardData.id = uuid();
-          Storage.add(cardData);
+          await Storage.add(cardData);
           this.showToast('添加成功');
         }
 
@@ -1864,9 +2213,9 @@
         document.getElementById('confirm-dialog').classList.add('show');
       },
 
-      doDelete() {
+      async doDelete() {
         if (this.editingId) {
-          Storage.delete(this.editingId);
+          await Storage.delete(this.editingId);
           this.showToast('已删除');
         }
         this.closeConfirm();
@@ -1881,7 +2230,7 @@
 
       // ----- 数据导入导出 -----
       exportData() {
-        const data = Storage.export();
+        const data = await Storage.export();
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1900,7 +2249,7 @@
         reader.onload = e => {
           try {
             const data = JSON.parse(e.target.result);
-            if (Storage.import(data)) {
+            if (await Storage.import(data)) {
               this.showToast('数据导入成功');
               this.renderHome();
               this.renderMine();
