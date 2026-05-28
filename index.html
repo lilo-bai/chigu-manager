@@ -205,6 +205,61 @@
       margin-top: 4px;
     }
 
+    .export-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 16px 8px;
+    }
+
+    .export-btn {
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: none;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(79, 195, 247, 0.3);
+      touch-action: manipulation;
+    }
+
+    .export-btn:active { transform: scale(0.95); }
+
+    .export-hint { font-size: 12px; color: var(--text-light); }
+
+    .card { position: relative; }
+
+    .card-select {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.9);
+      background: rgba(0, 0, 0, 0.2);
+      z-index: 10;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      color: transparent;
+      transition: all 0.15s;
+      touch-action: manipulation;
+    }
+
+    .card-select.checked {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .card.selected { outline: 3px solid var(--primary); outline-offset: -3px; }
+
     /* ===== 卡片 ===== */
     .card-grid {
       display: grid;
@@ -1503,6 +1558,35 @@ const UserStorage = {
       return '¥' + parseFloat(price || 0).toFixed(2);
     }
 
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function roundRectClip(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.clip();
+    }
+
     function getMonthKey(dateStr) {
       const d = new Date(dateStr);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -1518,6 +1602,7 @@ const UserStorage = {
       currentGroup: null,
       editingId: null,
       chartInstance: null,
+      selectedIds: new Set(),
 
       async init() {
         try {
@@ -1534,8 +1619,7 @@ const UserStorage = {
         } catch (err) {
           console.error('init error:', err);
         }
-        window.addEventListener('hashchange', () => this.handleRoute());
-        this.handleRoute();
+        this.showPage('home');
 
         // 点击外部关闭下拉
         document.addEventListener('click', e => {
@@ -1545,49 +1629,38 @@ const UserStorage = {
         });
       },
 
-      // ----- 路由 -----
+      // ----- 路由（纯JS，不依赖hashchange）-----
       navigate(page) {
-        window.location.hash = page === 'home' ? '' : page;
-        // 移动端 WebView hashchange 不可靠，fallback 直接执行
-        this.handleRoute();
+        this.showPage(page);
       },
 
       goBack() {
-        history.back();
+        this.showPage('home');
       },
 
-      async handleRoute() {
-        const hash = window.location.hash.replace('#', '') || 'home';
-        const [page, sub, ...rest] = hash.split('/');
-
+      showPage(pageId, cardId) {
+        this.currentPage = pageId;
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
-        this.currentPage = page;
-
-        try {
-          if (page === 'home' || page === '') {
-            document.getElementById('page-home').classList.add('active');
-            document.querySelectorAll('.nav-item')[0].classList.add('active');
-            this.currentGroup = sub === 'group' ? decodeURIComponent(rest[0] || '') : null;
-            await this.renderHome();
-            document.getElementById('fab').style.display = 'flex';
-          } else if (page === 'mine') {
-            document.getElementById('page-mine').classList.add('active');
-            document.querySelectorAll('.nav-item')[1].classList.add('active');
-            await this.renderMine();
-            document.getElementById('fab').style.display = 'none';
-          } else if (page === 'card') {
-            document.getElementById('page-card').classList.add('active');
-            document.getElementById('fab').style.display = 'none';
-            if (sub === 'edit') {
-              await this.editCard(rest[0]);
-            } else {
-              this.resetForm();
-            }
+        if (pageId === 'home' || pageId === '') {
+          document.getElementById('page-home').classList.add('active');
+          document.querySelectorAll('.nav-item')[0].classList.add('active');
+          this.renderHome().catch(console.error);
+          document.getElementById('fab').style.display = 'flex';
+        } else if (pageId === 'mine') {
+          document.getElementById('page-mine').classList.add('active');
+          document.querySelectorAll('.nav-item')[1].classList.add('active');
+          this.renderMine().catch(console.error);
+          document.getElementById('fab').style.display = 'none';
+        } else if (pageId === 'card') {
+          document.getElementById('page-card').classList.add('active');
+          document.getElementById('fab').style.display = 'none';
+          if (cardId) {
+            this.editCard(cardId).catch(console.error);
+          } else {
+            this.resetForm();
           }
-        } catch (err) {
-          console.error('route error:', err);
         }
       },
 
@@ -1638,6 +1711,10 @@ const UserStorage = {
                 `).join('')}
               </div>
             </div>
+            <div class="export-bar">
+              <span class="export-hint">选中卡片后点击导出拼图</span>
+              <button class="export-btn" onclick="app.exportCollage('${this.currentGroup.replace(/'/g, "\\'")}')">📸 拼图导出</button>
+            </div>
           `;
         } else {
           boardEl.innerHTML = '';
@@ -1653,30 +1730,35 @@ const UserStorage = {
             </div>
           `;
         } else {
+          const isGroupView = !!this.currentGroup;
           contentEl.innerHTML = `
             <div class="card-grid">
-              ${displayCards.map(card => this.renderCard(card)).join('')}
+              ${displayCards.map(card => this.renderCard(card, isGroupView)).join('')}
             </div>
           `;
         }
       },
 
-      renderCard(card) {
+      renderCard(card, selectable = false) {
         const status = STATUS_CONFIG[card.status] || STATUS_CONFIG.pending;
         const imgUrl = card.image || card.imageUrl;
+        const isSelected = selectable && this.selectedIds && this.selectedIds.has(card.id);
         return `
-          <div class="card" onclick="app.viewCard('${card.id}')">
-            ${imgUrl
-              ? `<img class="card-image" src="${imgUrl}" alt="">`
-              : `<div class="card-image-placeholder">🎀</div>`
-            }
-            <div class="card-body">
-              <div class="card-name">${card.name}</div>
-              <div class="card-row">
-                <div class="card-price">${formatPrice(card.price)}</div>
-                <span class="card-status ${status.class}">${status.label}</span>
+          <div class="card ${isSelected ? 'selected' : ''}">
+            ${selectable ? `<div class="card-select ${isSelected ? 'checked' : ''}" onclick="event.stopPropagation();app.toggleSelect('${card.id}')">${isSelected ? '✓' : ''}</div>` : ''}
+            <div style="width:100%;height:100%" onclick="app.viewCard('${card.id}')">
+              ${imgUrl
+                ? `<img class="card-image" src="${imgUrl}" alt="">`
+                : `<div class="card-image-placeholder">🎀</div>`
+              }
+              <div class="card-body">
+                <div class="card-name">${card.name}</div>
+                <div class="card-row">
+                  <div class="card-price">${formatPrice(card.price)}</div>
+                  <span class="card-status ${status.class}">${status.label}</span>
+                </div>
+                <div class="card-group">${card.group || ''}</div>
               </div>
-              <div class="card-group">${card.group || ''}</div>
             </div>
           </div>
         `;
@@ -1684,12 +1766,8 @@ const UserStorage = {
 
       switchGroup(group) {
         this.currentGroup = group || null;
-        this.renderHome();
-        if (group) {
-          window.location.hash = `home/group/${encodeURIComponent(group)}`;
-        } else {
-          window.location.hash = 'home';
-        }
+        this.selectedIds.clear();
+        this.renderHome().catch(console.error);
       },
 
       // ----- 我的页面 -----
@@ -2127,7 +2205,7 @@ const UserStorage = {
       },
 
       viewCard(id) {
-        window.location.hash = `card/edit/${id}`;
+        this.showPage('card', id);
       },
 
       handleImageUpload(input) {
@@ -2296,6 +2374,224 @@ const UserStorage = {
           input.value = '';
         };
         reader.readAsText(file);
+      },
+
+      // ----- 拼图导出 -----
+      toggleSelect(id) {
+        if (this.selectedIds.has(id)) {
+          this.selectedIds.delete(id);
+        } else {
+          this.selectedIds.add(id);
+        }
+        this.renderHome().catch(console.error);
+      },
+
+      async exportCollage(groupName) {
+        const cards = await Storage.getAll();
+        const groupCards = cards.filter(c => c.group === groupName);
+        let selectedCards = groupCards.filter(c => this.selectedIds.has(c.id));
+        if (selectedCards.length === 0) {
+          // 未选中则默认导出全部
+          selectedCards = groupCards;
+        }
+        if (selectedCards.length === 0) {
+          this.showToast('该团暂无卡片');
+          return;
+        }
+        this.showToast('正在生成图片...');
+        this.generateCollage(groupName, selectedCards);
+      },
+
+      async generateCollage(groupName, cards) {
+        const CANVAS_W = 800;
+        const PAD = 24;
+        const GAP = 16;
+        const ITEM_W = (CANVAS_W - PAD * 2 - GAP * 2) / 3; // 3列
+        const ITEM_H = ITEM_W + 46; // 图片 + 文字区
+
+        const statusOrder = ['arrived', 'pending', 'shipped', 'disbanded'];
+        const grouped = {};
+        statusOrder.forEach(s => grouped[s] = []);
+        cards.forEach(c => { if (grouped[c.status]) grouped[c.status].push(c); });
+
+        // 预加载所有图片
+        const loadImg = (src) => new Promise((resolve) => {
+          if (!src) { resolve(null); return; }
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = src;
+        });
+
+        const allImages = {};
+        for (const card of cards) {
+          const img = await loadImg(card.image || card.imageUrl);
+          allImages[card.id] = img;
+        }
+
+        // 计算总高度
+        let totalH = PAD;
+
+        // 标题区
+        const totalAmount = cards.filter(c => c.status !== 'disbanded').reduce((s, c) => s + parseFloat(c.price || 0), 0);
+        totalH += 68; // 标题横幅高度
+        totalH += PAD;
+
+        // 每个状态区域
+        let hasAny = false;
+        statusOrder.forEach(status => {
+          const list = grouped[status];
+          if (list.length > 0) {
+            hasAny = true;
+            totalH += 40; // 状态标题
+            const rows = Math.ceil(list.length / 3);
+            totalH += rows * ITEM_H + (rows - 1) * GAP;
+            totalH += PAD;
+          }
+        });
+
+        if (!hasAny) totalH += 100;
+
+        // 创建 canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = CANVAS_W;
+        canvas.height = totalH;
+        const ctx = canvas.getContext('2d');
+
+        // 白色背景
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, CANVAS_W, totalH);
+
+        // 柔和背景渐变
+        const bgGrad = ctx.createLinearGradient(0, 0, CANVAS_W, totalH);
+        bgGrad.addColorStop(0, '#F0F8FF');
+        bgGrad.addColorStop(1, '#E8F4FC');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, CANVAS_W, totalH);
+
+        let y = PAD;
+
+        // 顶部横幅
+        const bannerGrad = ctx.createLinearGradient(0, y, CANVAS_W, y + 68);
+        bannerGrad.addColorStop(0, '#4FC3F7');
+        bannerGrad.addColorStop(1, '#29B6F6');
+        ctx.fillStyle = bannerGrad;
+        roundRect(ctx, 16, y, CANVAS_W - 32, 68, 14);
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 22px Nunito, -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(groupName, 36, y + 32);
+        ctx.font = '14px Nunito, -apple-system, sans-serif';
+        ctx.globalAlpha = 0.9;
+        ctx.fillText(`累计金额：${formatPrice(totalAmount)}  |  ${cards.length} 件`, 36, y + 56);
+        ctx.globalAlpha = 1;
+        y += 68 + PAD;
+
+        // 各状态区域
+        statusOrder.forEach(status => {
+          const list = grouped[status];
+          if (list.length === 0) return;
+          const cfg = STATUS_CONFIG[status];
+
+          // 状态标题
+          ctx.fillStyle = '#3A506B';
+          ctx.font = 'bold 16px Nunito, -apple-system, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(`${cfg.icon} ${cfg.label}（${list.length}）`, PAD, y + 22);
+
+          // 状态色条
+          const statusColors = {
+            arrived: '#66BB6A', pending: '#FFA726', shipped: '#42A5F5', disbanded: '#BDBDBD'
+          };
+          ctx.fillStyle = statusColors[status] || '#999';
+          ctx.beginPath();
+          ctx.roundRect(PAD, y + 28, 60, 4, 2);
+          ctx.fill();
+          y += 44;
+
+          // 卡片网格
+          for (let i = 0; i < list.length; i++) {
+            const col = i % 3;
+            const row = Math.floor(i / 3);
+            const x = PAD + col * (ITEM_W + GAP);
+            const itemY = y + row * (ITEM_H + GAP);
+
+            const card = list[i];
+            const img = allImages[card.id];
+
+            // 卡片背景
+            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+            roundRect(ctx, x, itemY, ITEM_W, ITEM_H, 12);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(x, itemY, ITEM_W, ITEM_H);
+
+            // 图片区域
+            if (img) {
+              // 按比例裁剪填充
+              const imgRatio = img.width / img.height;
+              const boxRatio = ITEM_W / (ITEM_W - 2);
+              let sw, sh, sx, sy, dw, dh;
+              if (imgRatio > boxRatio) {
+                sh = img.height;
+                sw = sh * boxRatio;
+                sx = (img.width - sw) / 2;
+                sy = 0;
+              } else {
+                sw = img.width;
+                sh = sw / boxRatio;
+                sx = 0;
+                sy = (img.height - sh) / 2;
+              }
+              ctx.save();
+              roundRectClip(ctx, x + 1, itemY + 1, ITEM_W - 2, ITEM_W - 2, 11);
+              ctx.drawImage(img, sx, sy, sw, sh, x + 1, itemY + 1, ITEM_W - 2, ITEM_W - 2);
+              ctx.restore();
+            } else {
+              ctx.fillStyle = '#F5F5F5';
+              roundRect(ctx, x + 1, itemY + 1, ITEM_W - 2, ITEM_W - 2, 11);
+              ctx.fillStyle = '#BBB';
+              ctx.font = '28px sans-serif';
+              ctx.textAlign = 'center';
+              ctx.fillText(cfg.icon, x + ITEM_W / 2, itemY + ITEM_W / 2 + 10);
+            }
+
+            // 谷名文字
+            ctx.fillStyle = '#3A506B';
+            ctx.font = 'bold 13px Nunito, -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            const name = card.name.length > 10 ? card.name.slice(0, 9) + '…' : card.name;
+            ctx.fillText(name, x + 4, itemY + ITEM_W + 20);
+
+            // 价格
+            ctx.fillStyle = '#7A9BBF';
+            ctx.font = '12px Nunito, -apple-system, sans-serif';
+            ctx.fillText(`¥${card.price || 0}`, x + 4, itemY + ITEM_W + 38);
+          }
+
+          const rows = Math.ceil(list.length / 3);
+          y += rows * (ITEM_H + GAP) + PAD;
+        });
+
+        // 下载
+        try {
+          canvas.toBlob(blob => {
+            if (!blob) { this.showToast('生成失败，请重试'); return; }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `吃谷_${groupName}_${new Date().toISOString().slice(0, 10)}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            this.showToast('图片已生成并保存');
+          }, 'image/png');
+        } catch (e) {
+          console.error(e);
+          this.showToast('生成图片失败');
+        }
       },
 
       // ----- Toast -----
