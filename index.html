@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>吃谷小管家</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="https://imgcache.qq.com/qcloud/tcbjs/1.12.2/tcb.js"></script>
+  <script async src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script async src="https://imgcache.qq.com/qcloud/tcbjs/1.12.2/tcb.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -1301,7 +1301,7 @@
 
   <script>
     // ==================== 状态配置 ====================
-    const STATUS_CONFIG = {
+    var STATUS_CONFIG = {
       pending: { label: '未到货', class: 'status-pending', icon: '💨' },
       disbanded: { label: '已散', class: 'status-disbanded', icon: '🏳️' },
       arrived: { label: '已到货', class: 'status-arrived', icon: '🍽️' },
@@ -1309,13 +1309,13 @@
     };
 
 // ==================== CloudBase 配置 ====================
-const CB_CONFIG = {
+var CB_CONFIG = {
   enabled: false,
   env: '',
 };
 
-let cbApp = null;
-let cbDB = null;
+var cbApp = null;
+var cbDB = null;
 
 // ==================== CloudBase 初始化 ====================
 function initCloudBase() {
@@ -1337,13 +1337,13 @@ function initCloudBase() {
 // 用户输入 CN + ID，存储为 JSON { cn, id }，实际 userKey = `${cn}#${id}`
 function getSyncKeyObj() {
   try {
-    const raw = localStorage.getItem('chigu_sync_key');
+    var raw = localStorage.getItem('chigu_sync_key');
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
 function getSyncKey() {
-  const obj = getSyncKeyObj();
+  var obj = getSyncKeyObj();
   return obj && obj.cn && obj.id ? obj.cn + '#' + obj.id : '';
 }
 
@@ -1356,7 +1356,7 @@ function setSyncKey(key) {
 }
 
 function getOrCreateDeviceId() {
-  let id = localStorage.getItem('chigu_device_id');
+  var id = localStorage.getItem('chigu_device_id');
   if (!id) {
     id = 'd_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
     localStorage.setItem('chigu_device_id', id);
@@ -1369,19 +1369,19 @@ function getUserKey() {
 }
 
 // ==================== 本地存储（降级方案）====================
-const LocalStorage = {
+var LocalStorage = {
   KEY: 'chigu_cards_v1',
   getAll() {
     try {
-      const data = localStorage.getItem(this.KEY);
+      var data = localStorage.getItem(this.KEY);
       return data ? JSON.parse(data) : [];
     } catch { return []; }
   },
   save(cards) { localStorage.setItem(this.KEY, JSON.stringify(cards)); },
-  add(card) { const cards = this.getAll(); cards.push(card); this.save(cards); return card; },
+  add(card) { var cards = this.getAll(); cards.push(card); this.save(cards); return card; },
   update(id, updates) {
-    const cards = this.getAll();
-    const idx = cards.findIndex(c => c.id === id);
+    var cards = this.getAll();
+    var idx = cards.findIndex(c => c.id === id);
     if (idx >= 0) { cards[idx] = { ...cards[idx], ...updates, updatedAt: new Date().toISOString() }; this.save(cards); return cards[idx]; }
     return null;
   },
@@ -1396,7 +1396,7 @@ const LocalStorage = {
 };
 
 // ==================== CloudBase 存储 ====================
-const CBStorage = {
+var CBStorage = {
   _collection() {
     if (!cbDB) throw new Error('CloudBase not initialized');
     return cbDB.collection('cards');
@@ -1405,8 +1405,8 @@ const CBStorage = {
     return this._collection().doc(id);
   },
   async getAll() {
-    const key = getUserKey();
-    const { data } = await this._collection().where({ userKey: key }).orderBy('createdAt', 'desc').limit(1000).get();
+    var key = getUserKey();
+    var { data } = await this._collection().where({ userKey: key }).orderBy('createdAt', 'desc').limit(1000).get();
     return (data || []).map(doc => ({
       id: doc._id,
       objectId: doc._id,
@@ -1422,8 +1422,8 @@ const CBStorage = {
     }));
   },
   async add(card) {
-    const key = getUserKey();
-    const doc = {
+    var key = getUserKey();
+    var doc = {
       name: card.name,
       price: card.price,
       group: card.group,
@@ -1434,11 +1434,11 @@ const CBStorage = {
       createdAt: card.createdAt,
       userKey: key,
     };
-    const { id } = await this._collection().add(doc);
+    var { id } = await this._collection().add(doc);
     return { id, objectId: id, ...card };
   },
   async update(id, updates) {
-    const patch = {};
+    var patch = {};
     if (updates.name !== undefined) patch.name = updates.name;
     if (updates.price !== undefined) patch.price = updates.price;
     if (updates.group !== undefined) patch.group = updates.group;
@@ -1454,7 +1454,7 @@ const CBStorage = {
     await this._doc(id).remove();
   },
   async get(id) {
-    const { data } = await this._doc(id).get();
+    var { data } = await this._doc(id).get();
     if (!data) return null;
     return {
       id: data._id,
@@ -1472,9 +1472,9 @@ const CBStorage = {
   },
   async import(data) {
     if (!Array.isArray(data)) return false;
-    const key = getUserKey();
-    for (const card of data) {
-      const doc = {
+    var key = getUserKey();
+    for (var card of data) {
+      var doc = {
         name: card.name,
         price: card.price,
         group: card.group,
@@ -1490,13 +1490,13 @@ const CBStorage = {
     return true;
   },
   async export() {
-    const cards = await this.getAll();
+    var cards = await this.getAll();
     return { version: 1, exportAt: new Date().toISOString(), cards };
   }
 };
 
 // ==================== 统一存储接口 ====================
-const Storage = {
+var Storage = {
   useCloud() { return CB_CONFIG.enabled && !!cbDB; },
   async getAll() {
     if (this.useCloud()) return await CBStorage.getAll();
@@ -1528,11 +1528,11 @@ const Storage = {
   }
 };
 
-const UserStorage = {
+var UserStorage = {
   KEY: 'chigu_user_v1',
   get() {
     try {
-      const data = localStorage.getItem(this.KEY);
+      var data = localStorage.getItem(this.KEY);
       return data ? JSON.parse(data) : {};
     } catch { return {}; }
   },
@@ -1543,14 +1543,14 @@ const UserStorage = {
     // ==================== 工具函数 ====================
     function uuid() {
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-        const r = Math.random() * 16 | 0;
+        var r = Math.random() * 16 | 0;
         return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
       });
     }
 
     function formatDate(dateStr) {
       if (!dateStr) return '';
-      const d = new Date(dateStr);
+      var d = new Date(dateStr);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
 
@@ -1588,7 +1588,7 @@ const UserStorage = {
     }
 
     function getMonthKey(dateStr) {
-      const d = new Date(dateStr);
+      var d = new Date(dateStr);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     }
 
@@ -1597,7 +1597,9 @@ const UserStorage = {
     }
 
     // ==================== 应用逻辑 ====================
-    const app = {
+    var app = {
+      // MIUI兼容：显式挂载到window
+      __miuiCompat: (function(){ window.app = window.app || this; }).call({}),
       currentPage: 'home',
       currentGroup: null,
       editingId: null,
@@ -1606,10 +1608,10 @@ const UserStorage = {
 
       async init() {
         try {
-          const savedCB = localStorage.getItem('chigu_cb_config');
+          var savedCB = localStorage.getItem('chigu_cb_config');
           if (savedCB) {
             try {
-              const cfg = JSON.parse(savedCB);
+              var cfg = JSON.parse(savedCB);
               Object.assign(CB_CONFIG, cfg);
             } catch {}
           }
@@ -1666,32 +1668,32 @@ const UserStorage = {
 
       // ----- 首页 -----
       async renderHome() {
-        const cards = await Storage.getAll();
-        const groups = [...new Set(cards.map(c => c.group).filter(Boolean))];
-        const allGroups = ['全部', ...groups];
+        var cards = await Storage.getAll();
+        var groups = [...new Set(cards.map(c => c.group).filter(Boolean))];
+        var allGroups = ['全部', ...groups];
 
         // 渲染Tabs
-        const tabsEl = document.getElementById('home-tabs');
+        var tabsEl = document.getElementById('home-tabs');
         tabsEl.innerHTML = allGroups.map(g => {
-          const isActive = (g === '全部' && !this.currentGroup) || g === this.currentGroup;
+          var isActive = (g === '全部' && !this.currentGroup) || g === this.currentGroup;
           return `<button class="tab ${isActive ? 'active' : ''}" onclick="app.switchGroup(${g === '全部' ? "''" : JSON.stringify(g).replace(/"/g, '&quot;')})">${g}</button>`;
         }).join('');
 
         // 确定展示的卡片
-        let displayCards = cards;
+        var displayCards = cards;
         if (this.currentGroup) {
           displayCards = cards.filter(c => c.group === this.currentGroup);
         }
         displayCards.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
         // 渲染看板（仅团tab时显示）
-        const boardEl = document.getElementById('home-board');
+        var boardEl = document.getElementById('home-board');
         if (this.currentGroup) {
-          const groupCards = cards.filter(c => c.group === this.currentGroup);
-          const totalAmount = groupCards
+          var groupCards = cards.filter(c => c.group === this.currentGroup);
+          var totalAmount = groupCards
             .filter(c => c.status !== 'disbanded')
             .reduce((sum, c) => sum + parseFloat(c.price || 0), 0);
-          const statusCounts = {};
+          var statusCounts = {};
           Object.keys(STATUS_CONFIG).forEach(s => statusCounts[s] = 0);
           groupCards.forEach(c => { statusCounts[c.status] = (statusCounts[c.status] || 0) + 1; });
 
@@ -1721,7 +1723,7 @@ const UserStorage = {
         }
 
         // 渲染卡片列表
-        const contentEl = document.getElementById('home-content');
+        var contentEl = document.getElementById('home-content');
         if (displayCards.length === 0) {
           contentEl.innerHTML = `
             <div class="empty-state">
@@ -1730,7 +1732,7 @@ const UserStorage = {
             </div>
           `;
         } else {
-          const isGroupView = !!this.currentGroup;
+          var isGroupView = !!this.currentGroup;
           contentEl.innerHTML = `
             <div class="card-grid">
               ${displayCards.map(card => this.renderCard(card, isGroupView)).join('')}
@@ -1740,9 +1742,9 @@ const UserStorage = {
       },
 
       renderCard(card, selectable = false) {
-        const status = STATUS_CONFIG[card.status] || STATUS_CONFIG.pending;
-        const imgUrl = card.image || card.imageUrl;
-        const isSelected = selectable && this.selectedIds && this.selectedIds.has(card.id);
+        var status = STATUS_CONFIG[card.status] || STATUS_CONFIG.pending;
+        var imgUrl = card.image || card.imageUrl;
+        var isSelected = selectable && this.selectedIds && this.selectedIds.has(card.id);
         return `
           <div class="card ${isSelected ? 'selected' : ''}">
             ${selectable ? `<div class="card-select ${isSelected ? 'checked' : ''}" onclick="event.stopPropagation();app.toggleSelect('${card.id}')">${isSelected ? '✓' : ''}</div>` : ''}
@@ -1772,13 +1774,13 @@ const UserStorage = {
 
       // ----- 我的页面 -----
       async renderMine() {
-        const cards = await Storage.getAll();
-        const currentMonth = getCurrentMonthKey();
-        const syncObj = getSyncKeyObj();
-        const cbReady = CB_CONFIG.enabled && cbDB;
+        var cards = await Storage.getAll();
+        var currentMonth = getCurrentMonthKey();
+        var syncObj = getSyncKeyObj();
+        var cbReady = CB_CONFIG.enabled && cbDB;
 
         // 渲染用户资料
-        const user = UserStorage.get();
+        var user = UserStorage.get();
         document.getElementById('user-profile').innerHTML = `
           <div class="user-avatar" onclick="document.getElementById('avatar-input').click()"
                style="${user.avatar ? `background-image:url(${user.avatar});background-size:cover;background-position:center;` : ''}">
@@ -1797,7 +1799,7 @@ const UserStorage = {
         `;
 
         // 渲染云端面板
-        const cloudEl = document.getElementById('cloud-panel');
+        var cloudEl = document.getElementById('cloud-panel');
         if (cloudEl) {
           if (!cbReady) {
             cloudEl.innerHTML = `
@@ -1845,13 +1847,13 @@ const UserStorage = {
         }
 
         // 月度统计
-        const monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth);
-        const monthCount = monthCards.length;
-        const monthAmount = monthCards.reduce((sum, c) => sum + parseFloat(c.price || 0), 0);
+        var monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth);
+        var monthCount = monthCards.length;
+        var monthAmount = monthCards.reduce((sum, c) => sum + parseFloat(c.price || 0), 0);
 
         // 累计统计
-        const totalCount = cards.length;
-        const totalAmount = cards.reduce((sum, c) => sum + parseFloat(c.price || 0), 0);
+        var totalCount = cards.length;
+        var totalAmount = cards.reduce((sum, c) => sum + parseFloat(c.price || 0), 0);
 
         // 渲染统计面板
         document.getElementById('stats-grid').innerHTML = `
@@ -1874,7 +1876,7 @@ const UserStorage = {
         `;
 
         // 团列表
-        const groups = {};
+        var groups = {};
         cards.forEach(c => {
           if (!groups[c.group]) {
             groups[c.group] = { arrived: 0, pending: 0, shipped: 0, disbanded: 0 };
@@ -1882,7 +1884,7 @@ const UserStorage = {
           groups[c.group][c.status] = (groups[c.group][c.status] || 0) + 1;
         });
 
-        const groupListEl = document.getElementById('mine-group-list');
+        var groupListEl = document.getElementById('mine-group-list');
         if (Object.keys(groups).length === 0) {
           groupListEl.innerHTML = `
             <div class="group-list-header">我的团</div>
@@ -1909,9 +1911,9 @@ const UserStorage = {
 
       // ----- 统计详情 -----
       async showMonthCards() {
-        const cards = await Storage.getAll();
-        const currentMonth = getCurrentMonthKey();
-        const monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth)
+        var cards = await Storage.getAll();
+        var currentMonth = getCurrentMonthKey();
+        var monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth)
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
         this.showModal(`${currentMonth}月吃谷 (${monthCards.length})`, `
@@ -1931,19 +1933,19 @@ const UserStorage = {
       },
 
       async showMonthChart() {
-        const cards = await Storage.getAll();
-        const currentMonth = getCurrentMonthKey();
-        const monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth);
+        var cards = await Storage.getAll();
+        var currentMonth = getCurrentMonthKey();
+        var monthCards = cards.filter(c => getMonthKey(c.createdAt) === currentMonth);
 
         // 按日聚合
-        const daily = {};
+        var daily = {};
         monthCards.forEach(c => {
-          const day = formatDate(c.createdAt);
+          var day = formatDate(c.createdAt);
           daily[day] = (daily[day] || 0) + parseFloat(c.price || 0);
         });
 
-        const days = Object.keys(daily).sort();
-        const values = days.map(d => daily[d]);
+        var days = Object.keys(daily).sort();
+        var values = days.map(d => daily[d]);
 
         this.showModal(`${currentMonth}月交肾趋势`, `
           <div class="chart-container">
@@ -1955,15 +1957,15 @@ const UserStorage = {
       },
 
       async showTotalCountChart() {
-        const cards = await Storage.getAll();
-        const monthly = {};
+        var cards = await Storage.getAll();
+        var monthly = {};
         cards.forEach(c => {
-          const mk = getMonthKey(c.createdAt);
+          var mk = getMonthKey(c.createdAt);
           monthly[mk] = (monthly[mk] || 0) + 1;
         });
 
-        const months = Object.keys(monthly).sort();
-        const values = months.map(m => monthly[m]);
+        var months = Object.keys(monthly).sort();
+        var values = months.map(m => monthly[m]);
 
         this.showModal('每月吃谷数量', `
           <div class="chart-container">
@@ -1975,15 +1977,15 @@ const UserStorage = {
       },
 
       async showTotalAmountChart() {
-        const cards = await Storage.getAll();
-        const monthly = {};
+        var cards = await Storage.getAll();
+        var monthly = {};
         cards.forEach(c => {
-          const mk = getMonthKey(c.createdAt);
+          var mk = getMonthKey(c.createdAt);
           monthly[mk] = (monthly[mk] || 0) + parseFloat(c.price || 0);
         });
 
-        const months = Object.keys(monthly).sort();
-        const values = months.map(m => monthly[m]);
+        var months = Object.keys(monthly).sort();
+        var values = months.map(m => monthly[m]);
 
         this.showModal('每月交肾金额', `
           <div class="chart-container">
@@ -1995,8 +1997,9 @@ const UserStorage = {
       },
 
       renderChart(labels, data, label, color, type) {
-        const ctx = document.getElementById('chart-canvas');
+        var ctx = document.getElementById('chart-canvas');
         if (!ctx) return;
+        if (typeof Chart === 'undefined') return;
 
         if (this.chartInstance) {
           this.chartInstance.destroy();
@@ -2058,13 +2061,13 @@ const UserStorage = {
 
       // ----- 用户资料 -----
       handleAvatarUpload(input) {
-        const file = input.files[0];
+        var file = input.files[0];
         if (!file) return;
         if (file.size > 2 * 1024 * 1024) {
           this.showToast('头像太大啦，请换一张');
           return;
         }
-        const reader = new FileReader();
+        var reader = new FileReader();
         reader.onload = e => {
           UserStorage.update({ avatar: e.target.result });
           this.renderMine();
@@ -2074,15 +2077,15 @@ const UserStorage = {
       },
 
       editSignature() {
-        const user = UserStorage.get();
-        const display = document.getElementById('signature-display');
+        var user = UserStorage.get();
+        var display = document.getElementById('signature-display');
         display.innerHTML = `<input type="text" class="signature-input" id="signature-input" value="${user.signature || ''}" placeholder="写一句个签..." maxlength="30">`;
-        const input = document.getElementById('signature-input');
+        var input = document.getElementById('signature-input');
         input.focus();
         input.select();
 
-        const save = () => {
-          const value = input.value.trim();
+        var save = () => {
+          var value = input.value.trim();
           UserStorage.update({ signature: value });
           this.renderMine();
         };
@@ -2111,7 +2114,7 @@ const UserStorage = {
       },
 
       saveCloudConfig() {
-        const env = document.getElementById('setup-env').value.trim();
+        var env = document.getElementById('setup-env').value.trim();
         if (!env) {
           this.showToast('请填写环境 ID');
           return;
@@ -2119,7 +2122,7 @@ const UserStorage = {
         CB_CONFIG.env = env;
         CB_CONFIG.enabled = true;
         localStorage.setItem('chigu_cb_config', JSON.stringify(CB_CONFIG));
-        const ok = initCloudBase();
+        var ok = initCloudBase();
         this.closeModal();
         if (ok) {
           this.showToast('云端已启用，请绑定同步码');
@@ -2130,8 +2133,8 @@ const UserStorage = {
       },
 
       bindSyncKey() {
-        const cn = document.getElementById('cb-sync-cn').value.trim();
-        const idVal = document.getElementById('cb-sync-id').value.trim();
+        var cn = document.getElementById('cb-sync-cn').value.trim();
+        var idVal = document.getElementById('cb-sync-id').value.trim();
         if (!cn || !idVal) { this.showToast('请填写 CN 和 ID'); return; }
         setSyncKey({ cn, id: idVal });
         this.showToast('同步码已绑定');
@@ -2153,7 +2156,7 @@ const UserStorage = {
       },
 
       async editCard(id) {
-        const card = await Storage.get(id);
+        var card = await Storage.get(id);
         if (!card) return;
 
         this.editingId = id;
@@ -2209,7 +2212,7 @@ const UserStorage = {
       },
 
       handleImageUpload(input) {
-        const file = input.files[0];
+        var file = input.files[0];
         if (!file) return;
 
         if (file.size > 5 * 1024 * 1024) {
@@ -2217,9 +2220,9 @@ const UserStorage = {
           return;
         }
 
-        const reader = new FileReader();
+        var reader = new FileReader();
         reader.onload = e => {
-          const data = e.target.result;
+          var data = e.target.result;
           document.getElementById('card-image-data').value = data;
           document.getElementById('card-image-preview').src = data;
           document.getElementById('card-image-preview').style.display = 'block';
@@ -2250,11 +2253,11 @@ const UserStorage = {
       },
 
       filterGroups(query) {
-        const cards = Storage.getAll();
-        const groups = [...new Set(cards.map(c => c.group).filter(Boolean))];
-        const filtered = groups.filter(g => g.toLowerCase().includes((query || '').toLowerCase()));
+        var cards = Storage.getAll();
+        var groups = [...new Set(cards.map(c => c.group).filter(Boolean))];
+        var filtered = groups.filter(g => g.toLowerCase().includes((query || '').toLowerCase()));
 
-        const dropdown = document.getElementById('group-dropdown');
+        var dropdown = document.getElementById('group-dropdown');
         if (filtered.length === 0) {
           dropdown.classList.remove('show');
           return;
@@ -2274,14 +2277,14 @@ const UserStorage = {
       async saveCard(e) {
         e.preventDefault();
 
-        const name = document.getElementById('card-name').value.trim();
-        const price = parseFloat(document.getElementById('card-price').value) || 0;
-        const group = document.getElementById('card-group').value.trim();
-        const status = document.getElementById('card-status').value;
-        const deadline = document.getElementById('card-deadline').value;
-        const note = document.getElementById('card-note').value.trim();
-        const image = document.getElementById('card-image-data').value;
-        const createdDate = document.getElementById('card-created').value;
+        var name = document.getElementById('card-name').value.trim();
+        var price = parseFloat(document.getElementById('card-price').value) || 0;
+        var group = document.getElementById('card-group').value.trim();
+        var status = document.getElementById('card-status').value;
+        var deadline = document.getElementById('card-deadline').value;
+        var note = document.getElementById('card-note').value.trim();
+        var image = document.getElementById('card-image-data').value;
+        var createdDate = document.getElementById('card-created').value;
 
         if (!name || name.length > 20) {
           this.showToast('谷名需要在1-20字之间');
@@ -2292,7 +2295,7 @@ const UserStorage = {
           return;
         }
 
-        const cardData = {
+        var cardData = {
           name,
           price,
           group,
@@ -2342,10 +2345,10 @@ const UserStorage = {
 
       // ----- 数据导入导出 -----
       exportData() {
-        const data = await Storage.export();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        var data = await Storage.export();
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
         a.href = url;
         a.download = `吃谷备份_${formatDate(new Date())}.json`;
         a.click();
@@ -2354,13 +2357,13 @@ const UserStorage = {
       },
 
       importData(input) {
-        const file = input.files[0];
+        var file = input.files[0];
         if (!file) return;
 
-        const reader = new FileReader();
+        var reader = new FileReader();
         reader.onload = e => {
           try {
-            const data = JSON.parse(e.target.result);
+            var data = JSON.parse(e.target.result);
             if (await Storage.import(data)) {
               this.showToast('数据导入成功');
               this.renderHome();
@@ -2387,9 +2390,9 @@ const UserStorage = {
       },
 
       async exportCollage(groupName) {
-        const cards = await Storage.getAll();
-        const groupCards = cards.filter(c => c.group === groupName);
-        let selectedCards = groupCards.filter(c => this.selectedIds.has(c.id));
+        var cards = await Storage.getAll();
+        var groupCards = cards.filter(c => c.group === groupName);
+        var selectedCards = groupCards.filter(c => this.selectedIds.has(c.id));
         if (selectedCards.length === 0) {
           // 未选中则默认导出全部
           selectedCards = groupCards;
@@ -2403,49 +2406,49 @@ const UserStorage = {
       },
 
       async generateCollage(groupName, cards) {
-        const CANVAS_W = 800;
-        const PAD = 24;
-        const GAP = 16;
-        const ITEM_W = (CANVAS_W - PAD * 2 - GAP * 2) / 3; // 3列
-        const ITEM_H = ITEM_W + 46; // 图片 + 文字区
+        var CANVAS_W = 800;
+        var PAD = 24;
+        var GAP = 16;
+        var ITEM_W = (CANVAS_W - PAD * 2 - GAP * 2) / 3; // 3列
+        var ITEM_H = ITEM_W + 46; // 图片 + 文字区
 
-        const statusOrder = ['arrived', 'pending', 'shipped', 'disbanded'];
-        const grouped = {};
+        var statusOrder = ['arrived', 'pending', 'shipped', 'disbanded'];
+        var grouped = {};
         statusOrder.forEach(s => grouped[s] = []);
         cards.forEach(c => { if (grouped[c.status]) grouped[c.status].push(c); });
 
         // 预加载所有图片
-        const loadImg = (src) => new Promise((resolve) => {
+        var loadImg = (src) => new Promise((resolve) => {
           if (!src) { resolve(null); return; }
-          const img = new Image();
+          var img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => resolve(img);
           img.onerror = () => resolve(null);
           img.src = src;
         });
 
-        const allImages = {};
-        for (const card of cards) {
-          const img = await loadImg(card.image || card.imageUrl);
+        var allImages = {};
+        for (var card of cards) {
+          var img = await loadImg(card.image || card.imageUrl);
           allImages[card.id] = img;
         }
 
         // 计算总高度
-        let totalH = PAD;
+        var totalH = PAD;
 
         // 标题区
-        const totalAmount = cards.filter(c => c.status !== 'disbanded').reduce((s, c) => s + parseFloat(c.price || 0), 0);
+        var totalAmount = cards.filter(c => c.status !== 'disbanded').reduce((s, c) => s + parseFloat(c.price || 0), 0);
         totalH += 68; // 标题横幅高度
         totalH += PAD;
 
         // 每个状态区域
-        let hasAny = false;
+        var hasAny = false;
         statusOrder.forEach(status => {
-          const list = grouped[status];
+          var list = grouped[status];
           if (list.length > 0) {
             hasAny = true;
             totalH += 40; // 状态标题
-            const rows = Math.ceil(list.length / 3);
+            var rows = Math.ceil(list.length / 3);
             totalH += rows * ITEM_H + (rows - 1) * GAP;
             totalH += PAD;
           }
@@ -2454,26 +2457,26 @@ const UserStorage = {
         if (!hasAny) totalH += 100;
 
         // 创建 canvas
-        const canvas = document.createElement('canvas');
+        var canvas = document.createElement('canvas');
         canvas.width = CANVAS_W;
         canvas.height = totalH;
-        const ctx = canvas.getContext('2d');
+        var ctx = canvas.getContext('2d');
 
         // 白色背景
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, CANVAS_W, totalH);
 
         // 柔和背景渐变
-        const bgGrad = ctx.createLinearGradient(0, 0, CANVAS_W, totalH);
+        var bgGrad = ctx.createLinearGradient(0, 0, CANVAS_W, totalH);
         bgGrad.addColorStop(0, '#F0F8FF');
         bgGrad.addColorStop(1, '#E8F4FC');
         ctx.fillStyle = bgGrad;
         ctx.fillRect(0, 0, CANVAS_W, totalH);
 
-        let y = PAD;
+        var y = PAD;
 
         // 顶部横幅
-        const bannerGrad = ctx.createLinearGradient(0, y, CANVAS_W, y + 68);
+        var bannerGrad = ctx.createLinearGradient(0, y, CANVAS_W, y + 68);
         bannerGrad.addColorStop(0, '#4FC3F7');
         bannerGrad.addColorStop(1, '#29B6F6');
         ctx.fillStyle = bannerGrad;
@@ -2491,9 +2494,9 @@ const UserStorage = {
 
         // 各状态区域
         statusOrder.forEach(status => {
-          const list = grouped[status];
+          var list = grouped[status];
           if (list.length === 0) return;
-          const cfg = STATUS_CONFIG[status];
+          var cfg = STATUS_CONFIG[status];
 
           // 状态标题
           ctx.fillStyle = '#3A506B';
@@ -2502,7 +2505,7 @@ const UserStorage = {
           ctx.fillText(`${cfg.icon} ${cfg.label}（${list.length}）`, PAD, y + 22);
 
           // 状态色条
-          const statusColors = {
+          var statusColors = {
             arrived: '#66BB6A', pending: '#FFA726', shipped: '#42A5F5', disbanded: '#BDBDBD'
           };
           ctx.fillStyle = statusColors[status] || '#999';
@@ -2512,14 +2515,14 @@ const UserStorage = {
           y += 44;
 
           // 卡片网格
-          for (let i = 0; i < list.length; i++) {
-            const col = i % 3;
-            const row = Math.floor(i / 3);
-            const x = PAD + col * (ITEM_W + GAP);
-            const itemY = y + row * (ITEM_H + GAP);
+          for (var i = 0; i < list.length; i++) {
+            var col = i % 3;
+            var row = Math.floor(i / 3);
+            var x = PAD + col * (ITEM_W + GAP);
+            var itemY = y + row * (ITEM_H + GAP);
 
-            const card = list[i];
-            const img = allImages[card.id];
+            var card = list[i];
+            var img = allImages[card.id];
 
             // 卡片背景
             ctx.fillStyle = 'rgba(255,255,255,0.9)';
@@ -2530,9 +2533,9 @@ const UserStorage = {
             // 图片区域
             if (img) {
               // 按比例裁剪填充
-              const imgRatio = img.width / img.height;
-              const boxRatio = ITEM_W / (ITEM_W - 2);
-              let sw, sh, sx, sy, dw, dh;
+              var imgRatio = img.width / img.height;
+              var boxRatio = ITEM_W / (ITEM_W - 2);
+              var sw, sh, sx, sy, dw, dh;
               if (imgRatio > boxRatio) {
                 sh = img.height;
                 sw = sh * boxRatio;
@@ -2561,7 +2564,7 @@ const UserStorage = {
             ctx.fillStyle = '#3A506B';
             ctx.font = 'bold 13px Nunito, -apple-system, sans-serif';
             ctx.textAlign = 'left';
-            const name = card.name.length > 10 ? card.name.slice(0, 9) + '…' : card.name;
+            var name = card.name.length > 10 ? card.name.slice(0, 9) + '…' : card.name;
             ctx.fillText(name, x + 4, itemY + ITEM_W + 20);
 
             // 价格
@@ -2570,7 +2573,7 @@ const UserStorage = {
             ctx.fillText(`¥${card.price || 0}`, x + 4, itemY + ITEM_W + 38);
           }
 
-          const rows = Math.ceil(list.length / 3);
+          var rows = Math.ceil(list.length / 3);
           y += rows * (ITEM_H + GAP) + PAD;
         });
 
@@ -2578,8 +2581,8 @@ const UserStorage = {
         try {
           canvas.toBlob(blob => {
             if (!blob) { this.showToast('生成失败，请重试'); return; }
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
             a.href = url;
             a.download = `吃谷_${groupName}_${new Date().toISOString().slice(0, 10)}.png`;
             document.body.appendChild(a);
@@ -2596,7 +2599,7 @@ const UserStorage = {
 
       // ----- Toast -----
       showToast(msg) {
-        const toast = document.getElementById('toast');
+        var toast = document.getElementById('toast');
         toast.textContent = msg;
         toast.classList.add('show');
         setTimeout(() => toast.classList.remove('show'), 2500);
