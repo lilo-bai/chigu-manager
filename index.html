@@ -716,12 +716,14 @@
       justify-content: center;
       visibility: hidden;
       opacity: 0;
+      pointer-events: none;
       transition: opacity 0.2s, visibility 0.2s;
     }
 
     .modal-overlay.show {
       visibility: visible;
       opacity: 1;
+      pointer-events: auto;
     }
 
     .modal-content {
@@ -982,12 +984,14 @@
       padding: 20px;
       visibility: hidden;
       opacity: 0;
+      pointer-events: none;
       transition: opacity 0.2s, visibility 0.2s;
     }
 
     .confirm-dialog.show {
       visibility: visible;
       opacity: 1;
+      pointer-events: auto;
     }
 
     .confirm-box {
@@ -1261,6 +1265,9 @@ let cbDB = null;
 // ==================== CloudBase 初始化 ====================
 function initCloudBase() {
   if (!CB_CONFIG.enabled || !CB_CONFIG.env) return false;
+  if (typeof cloudbase === 'undefined') {
+    console.warn('CloudBase SDK not loaded'); return false;
+  }
   try {
     cbApp = cloudbase.init({ env: CB_CONFIG.env });
     cbDB = cbApp.database();
@@ -1541,6 +1548,8 @@ const UserStorage = {
       // ----- 路由 -----
       navigate(page) {
         window.location.hash = page === 'home' ? '' : page;
+        // 移动端 WebView hashchange 不可靠，fallback 直接执行
+        this.handleRoute();
       },
 
       goBack() {
